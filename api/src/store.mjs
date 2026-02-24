@@ -24,6 +24,11 @@ export function findProtocol(protocolId) {
   return db.protocols.find((p) => p.id === protocolId) || null;
 }
 
+export function listProtocolsByOwnerWallet(ownerWallet) {
+  const wallet = (ownerWallet || "").toLowerCase();
+  return db.protocols.filter((p) => (p.ownerWallet || "").toLowerCase() === wallet);
+}
+
 export function updateProtocol(protocolId, patch) {
   const protocol = findProtocol(protocolId);
   if (!protocol) return null;

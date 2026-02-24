@@ -3,7 +3,15 @@ import { randomBytes } from "node:crypto";
 import { createClient } from "genlayer-js";
 import { localnet, studionet } from "genlayer-js/chains";
 import { recoverMessageAddress } from "viem";
-import { addIncident, db, ensureProtocol, findProtocol, updateProtocol, upsertScore } from "./store.mjs";
+import {
+  addIncident,
+  db,
+  ensureProtocol,
+  findProtocol,
+  listProtocolsByOwnerWallet,
+  updateProtocol,
+  upsertScore,
+} from "./store.mjs";
 
 const PORT = Number(process.env.PORT || 8080);
 const SERVICE_NAME = process.env.SERVICE_NAME || "certlayer-api";
@@ -94,6 +102,22 @@ function canAccessWrite(req, pathname) {
   if (isPublicPostRoute(pathname)) return true;
   if (hasInternalAccess(req)) return true;
   return Boolean(getSession(req));
+}
+
+function enforceProtocolOwnership(req, protocolId) {
+  if (!protocolId) return { ok: false, status: 400, error: "protocolId required" };
+  if (hasInternalAccess(req)) return { ok: true };
+
+  const session = getSession(req);
+  if (!session) return { ok: false, status: 401, error: "session required" };
+
+  const protocol = findProtocol(protocolId);
+  if (!protocol) return { ok: false, status: 404, error: "protocol not found" };
+
+  if (normalizeWallet(protocol.ownerWallet) !== normalizeWallet(session.wallet)) {
+    return { ok: false, status: 403, error: "forbidden: cannot access another protocol" };
+  }
+  return { ok: true, session, protocol };
 }
 
 function buildClient(forWrite = false) {
@@ -264,19 +288,8 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "POST" && pathname === "/v1/protocols/update") {
       const body = await readBody(req);
-      if (!body.protocolId) return send(res, 400, { error: "protocolId required" });
-
-      const protocol = findProtocol(body.protocolId);
-      if (!protocol) return send(res, 404, { error: "protocol not found" });
-
-      const session = getSession(req);
-      const isInternal = hasInternalAccess(req);
-      if (!isInternal) {
-        if (!session) return send(res, 401, { error: "session required" });
-        if (normalizeWallet(protocol.ownerWallet) !== normalizeWallet(session.wallet)) {
-          return send(res, 403, { error: "forbidden: owner wallet required" });
-        }
-      }
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
 
       const updated = updateProtocol(body.protocolId, {
         name: body.name,
@@ -288,12 +301,18 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && pathname === "/v1/protocols") {
-      return send(res, 200, { items: db.protocols });
+      if (hasInternalAccess(req)) {
+        return send(res, 200, { items: db.protocols });
+      }
+      const session = getSession(req);
+      if (!session) return send(res, 401, { error: "session required" });
+      return send(res, 200, { items: listProtocolsByOwnerWallet(session.wallet) });
     }
 
     if (req.method === "POST" && pathname === "/v1/incidents") {
       const body = await readBody(req);
-      if (!body.protocolId) return send(res, 400, { error: "protocolId required" });
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
 
       const incident = addIncident(body);
 
@@ -330,7 +349,12 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && pathname === "/v1/incidents") {
-      return send(res, 200, { items: db.incidents });
+      if (hasInternalAccess(req)) return send(res, 200, { items: db.incidents });
+      const session = getSession(req);
+      if (!session) return send(res, 401, { error: "session required" });
+      const owned = listProtocolsByOwnerWallet(session.wallet).map((p) => p.id);
+      const items = db.incidents.filter((i) => owned.includes(i.protocolId));
+      return send(res, 200, { items });
     }
 
     if (req.method === "POST" && pathname === "/v1/pools/deposit") {
@@ -338,6 +362,8 @@ const server = createServer(async (req, res) => {
       if (!body.protocolId || body.amount === undefined) {
         return send(res, 400, { error: "protocolId and amount required" });
       }
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
 
       if (LIVE_MODE) {
         const onchain = await contractWrite("deposit", [body.protocolId, Number(body.amount)]);
@@ -352,6 +378,8 @@ const server = createServer(async (req, res) => {
       if (!body.incidentId || !body.protocolId || body.totalAmount === undefined) {
         return send(res, 400, { error: "incidentId, protocolId, totalAmount required" });
       }
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
 
       if (LIVE_MODE) {
         const onchain = await contractWrite("execute_compensation", [
@@ -368,6 +396,8 @@ const server = createServer(async (req, res) => {
     if (req.method === "POST" && pathname === "/v1/reputation/recompute") {
       const body = await readBody(req);
       if (!body.protocolId) return send(res, 400, { error: "protocolId required" });
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
 
       const uptime = Number(body.uptimeComponent ?? 7000);
       const incident = Number(body.incidentComponent ?? 7000);
@@ -392,7 +422,20 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && pathname === "/v1/reputation/protocols") {
-      const items = db.protocols.map((p) => {
+      const visibleProtocols = hasInternalAccess(req)
+        ? db.protocols
+        : (() => {
+            const session = getSession(req);
+            if (!session) return [];
+            return listProtocolsByOwnerWallet(session.wallet);
+          })();
+
+      if (!hasInternalAccess(req) && visibleProtocols.length === 0) {
+        const session = getSession(req);
+        if (!session) return send(res, 401, { error: "session required" });
+      }
+
+      const items = visibleProtocols.map((p) => {
         const score = db.scores.find((s) => s.protocolId === p.id) || {
           score: 0,
           grade: "N/A",
