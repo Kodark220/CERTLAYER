@@ -33,6 +33,23 @@ export default function HomePage() {
   const [registerError, setRegisterError] = useState("");
   const [registerSuccess, setRegisterSuccess] = useState("");
   const [registerTxHash, setRegisterTxHash] = useState("");
+  const [activeProtocolId, setActiveProtocolId] = useState("");
+  const [lifecycleForm, setLifecycleForm] = useState({
+    incidentId: "",
+    startTs: "",
+    evidenceHash: "",
+    walletsCsv: "",
+    amountsCsv: "",
+    challengeEndsTs: "",
+    disputeWallet: "",
+    disputeEvidenceHash: "",
+    disputeDecision: "approved",
+    payoutStartIndex: "0",
+    payoutLimit: "20",
+  });
+  const [lifecycleLoading, setLifecycleLoading] = useState(false);
+  const [lifecycleError, setLifecycleError] = useState("");
+  const [lifecycleLog, setLifecycleLog] = useState<string[]>([]);
 
   const headline = useMemo(
     () => "You verify. You trigger. You enforce.",
@@ -166,6 +183,7 @@ export default function HomePage() {
         throw new Error(data.error || "Registration failed");
       }
       setRegisterSuccess(`Protocol registered: ${data.protocol.id}`);
+      setActiveProtocolId(data.protocol.id);
       setRegisterTxHash(data.onchain?.txHash || "");
       setRegisterForm((prev) => ({ ...prev, id: "" }));
     } catch (error) {
@@ -173,6 +191,37 @@ export default function HomePage() {
       setRegisterError(message);
     } finally {
       setRegisterLoading(false);
+    }
+  }
+
+  async function runLifecycleAction(path: string, payload: Record<string, unknown>, label: string) {
+    if (!session) {
+      setLifecycleError("Please sign in first.");
+      return;
+    }
+    const protocolId = activeProtocolId.trim();
+    if (!protocolId) {
+      setLifecycleError("Set or register a Protocol ID first.");
+      return;
+    }
+
+    setLifecycleError("");
+    setLifecycleLoading(true);
+    try {
+      const body = { ...payload, protocolId };
+      const res = await postJson(path, body, session.token);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `${label} failed`);
+      const tx = data.onchain?.txHash ? ` tx=${data.onchain.txHash}` : "";
+      setLifecycleLog((prev) => [`${label} success${tx}`, ...prev].slice(0, 20));
+      if (path === "/v1/incidents/create-lifecycle" && data.incidentId) {
+        setLifecycleForm((p) => ({ ...p, incidentId: data.incidentId }));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `${label} failed`;
+      setLifecycleError(message);
+    } finally {
+      setLifecycleLoading(false);
     }
   }
 
@@ -257,7 +306,236 @@ export default function HomePage() {
                 Tx Hash: {registerTxHash}
               </p>
             ) : null}
+            <div>
+              <label className="label">Active Protocol ID (for lifecycle actions)</label>
+              <input
+                value={activeProtocolId}
+                onChange={(e) => setActiveProtocolId(e.target.value)}
+                placeholder="proto-my-service"
+              />
+            </div>
             {registerError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{registerError}</p> : null}
+          </div>
+        </section>
+        <section className="card">
+          <h3>Incident Lifecycle</h3>
+          <p>Create incident, attach affected users, challenge/dispute, finalize, payout batch.</p>
+          <div className="grid">
+            <div>
+              <label className="label">Incident ID</label>
+              <input
+                value={lifecycleForm.incidentId}
+                onChange={(e) => setLifecycleForm((p) => ({ ...p, incidentId: e.target.value }))}
+                placeholder="inc-001"
+              />
+            </div>
+            <div>
+              <label className="label">Start TS (unix, optional)</label>
+              <input
+                value={lifecycleForm.startTs}
+                onChange={(e) => setLifecycleForm((p) => ({ ...p, startTs: e.target.value }))}
+                placeholder="1700000000"
+              />
+            </div>
+            <div>
+              <label className="label">Evidence Hash</label>
+              <input
+                value={lifecycleForm.evidenceHash}
+                onChange={(e) => setLifecycleForm((p) => ({ ...p, evidenceHash: e.target.value }))}
+                placeholder="ipfs://... or hash"
+              />
+            </div>
+            <button
+              disabled={lifecycleLoading}
+              onClick={() =>
+                runLifecycleAction(
+                  "/v1/incidents/create-lifecycle",
+                  {
+                    incidentId: lifecycleForm.incidentId || undefined,
+                    startTs: lifecycleForm.startTs ? Number(lifecycleForm.startTs) : undefined,
+                    evidenceHash: lifecycleForm.evidenceHash,
+                  },
+                  "Create incident"
+                )
+              }
+            >
+              {lifecycleLoading ? "Running..." : "1) Create Incident"}
+            </button>
+
+            <div>
+              <label className="label">Wallets CSV</label>
+              <input
+                value={lifecycleForm.walletsCsv}
+                onChange={(e) => setLifecycleForm((p) => ({ ...p, walletsCsv: e.target.value }))}
+                placeholder="0xabc...,0xdef..."
+              />
+            </div>
+            <div>
+              <label className="label">Amounts CSV</label>
+              <input
+                value={lifecycleForm.amountsCsv}
+                onChange={(e) => setLifecycleForm((p) => ({ ...p, amountsCsv: e.target.value }))}
+                placeholder="100,250"
+              />
+            </div>
+            <button
+              disabled={lifecycleLoading}
+              onClick={() =>
+                runLifecycleAction(
+                  "/v1/incidents/affected-users",
+                  {
+                    incidentId: lifecycleForm.incidentId,
+                    walletsCsv: lifecycleForm.walletsCsv,
+                    amountsCsv: lifecycleForm.amountsCsv,
+                  },
+                  "Attach affected users"
+                )
+              }
+            >
+              {lifecycleLoading ? "Running..." : "2) Attach Affected Users"}
+            </button>
+
+            <div>
+              <label className="label">Challenge Ends TS (unix)</label>
+              <input
+                value={lifecycleForm.challengeEndsTs}
+                onChange={(e) => setLifecycleForm((p) => ({ ...p, challengeEndsTs: e.target.value }))}
+                placeholder="1700003600"
+              />
+            </div>
+            <button
+              disabled={lifecycleLoading}
+              onClick={() =>
+                runLifecycleAction(
+                  "/v1/incidents/challenge/open",
+                  {
+                    incidentId: lifecycleForm.incidentId,
+                    challengeEndsTs: Number(lifecycleForm.challengeEndsTs),
+                  },
+                  "Open challenge window"
+                )
+              }
+            >
+              {lifecycleLoading ? "Running..." : "3) Open Challenge Window"}
+            </button>
+
+            <div>
+              <label className="label">Dispute Wallet</label>
+              <input
+                value={lifecycleForm.disputeWallet}
+                onChange={(e) => setLifecycleForm((p) => ({ ...p, disputeWallet: e.target.value }))}
+                placeholder="0x..."
+              />
+            </div>
+            <div>
+              <label className="label">Dispute Evidence Hash</label>
+              <input
+                value={lifecycleForm.disputeEvidenceHash}
+                onChange={(e) => setLifecycleForm((p) => ({ ...p, disputeEvidenceHash: e.target.value }))}
+                placeholder="hash"
+              />
+            </div>
+            <button
+              disabled={lifecycleLoading}
+              onClick={() =>
+                runLifecycleAction(
+                  "/v1/incidents/dispute",
+                  {
+                    incidentId: lifecycleForm.incidentId,
+                    wallet: lifecycleForm.disputeWallet,
+                    evidenceHash: lifecycleForm.disputeEvidenceHash,
+                  },
+                  "Raise dispute"
+                )
+              }
+            >
+              {lifecycleLoading ? "Running..." : "4) Raise Dispute (optional)"}
+            </button>
+
+            <div>
+              <label className="label">Dispute Decision</label>
+              <select
+                value={lifecycleForm.disputeDecision}
+                onChange={(e) => setLifecycleForm((p) => ({ ...p, disputeDecision: e.target.value }))}
+              >
+                <option value="approved">approved</option>
+                <option value="rejected">rejected</option>
+              </select>
+            </div>
+            <button
+              disabled={lifecycleLoading}
+              onClick={() =>
+                runLifecycleAction(
+                  "/v1/incidents/dispute/resolve",
+                  {
+                    incidentId: lifecycleForm.incidentId,
+                    wallet: lifecycleForm.disputeWallet,
+                    decision: lifecycleForm.disputeDecision,
+                  },
+                  "Resolve dispute"
+                )
+              }
+            >
+              {lifecycleLoading ? "Running..." : "5) Resolve Dispute (optional)"}
+            </button>
+
+            <button
+              disabled={lifecycleLoading}
+              onClick={() =>
+                runLifecycleAction(
+                  "/v1/incidents/finalize",
+                  { incidentId: lifecycleForm.incidentId },
+                  "Finalize incident"
+                )
+              }
+            >
+              {lifecycleLoading ? "Running..." : "6) Finalize Incident"}
+            </button>
+
+            <div>
+              <label className="label">Payout Start Index</label>
+              <input
+                value={lifecycleForm.payoutStartIndex}
+                onChange={(e) => setLifecycleForm((p) => ({ ...p, payoutStartIndex: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="label">Payout Limit</label>
+              <input
+                value={lifecycleForm.payoutLimit}
+                onChange={(e) => setLifecycleForm((p) => ({ ...p, payoutLimit: e.target.value }))}
+              />
+            </div>
+            <button
+              disabled={lifecycleLoading}
+              onClick={() =>
+                runLifecycleAction(
+                  "/v1/incidents/payout-batch",
+                  {
+                    incidentId: lifecycleForm.incidentId,
+                    startIndex: Number(lifecycleForm.payoutStartIndex || 0),
+                    limit: Number(lifecycleForm.payoutLimit || 20),
+                  },
+                  "Execute payout batch"
+                )
+              }
+            >
+              {lifecycleLoading ? "Running..." : "7) Execute Payout Batch"}
+            </button>
+
+            {lifecycleError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{lifecycleError}</p> : null}
+            {lifecycleLog.length > 0 ? (
+              <div>
+                <label className="label">Lifecycle Log</label>
+                <div className="grid">
+                  {lifecycleLog.map((line, idx) => (
+                    <div key={`${line}-${idx}`} className="kpi" style={{ fontSize: 12 }}>
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
         <section className="card">
