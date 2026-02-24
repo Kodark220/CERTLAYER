@@ -307,14 +307,16 @@ export default function HomePage() {
                 Tx Hash: {registerTxHash}
               </p>
             ) : null}
-            <div>
-              <label className="label">Active Protocol ID (for lifecycle actions)</label>
-              <input
-                value={activeProtocolId}
-                onChange={(e) => setActiveProtocolId(e.target.value)}
-                placeholder="proto-my-service"
-              />
-            </div>
+            {canSeeInternalControls ? (
+              <div>
+                <label className="label">Active Protocol ID (for lifecycle actions)</label>
+                <input
+                  value={activeProtocolId}
+                  onChange={(e) => setActiveProtocolId(e.target.value)}
+                  placeholder="proto-my-service"
+                />
+              </div>
+            ) : null}
             {registerError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{registerError}</p> : null}
           </div>
         </section>
