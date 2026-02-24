@@ -17,6 +17,7 @@ class CertLayerContract(gl.Contract):
     incident_signal_verified: TreeMap[str, bool]
     incident_signal_note: TreeMap[str, str]
     incident_protocol_id: TreeMap[str, str]
+    incident_type: TreeMap[str, str]
     incident_start_ts: TreeMap[str, bigint]
     incident_evidence_hash: TreeMap[str, str]
     incident_challenge_ends_ts: TreeMap[str, bigint]
@@ -26,6 +27,27 @@ class CertLayerContract(gl.Contract):
     incident_paid_count: TreeMap[str, bigint]
     incident_dispute_decision: TreeMap[str, str]
     incident_dispute_evidence: TreeMap[str, str]
+    incident_recovery_pool: TreeMap[str, bigint]
+    incident_recovery_distributed: TreeMap[str, bigint]
+    incident_last_clean_block: TreeMap[str, bigint]
+    incident_trigger_sources: TreeMap[str, str]
+    incident_response_speed_score: TreeMap[str, bigint]
+    incident_communication_quality_score: TreeMap[str, bigint]
+    incident_pool_adequacy_score: TreeMap[str, bigint]
+    incident_post_mortem_score: TreeMap[str, bigint]
+    incident_recovery_effort_score: TreeMap[str, bigint]
+
+    # Community commitments
+    commitment_protocol_id: TreeMap[str, str]
+    commitment_type: TreeMap[str, str]
+    commitment_source_url: TreeMap[str, str]
+    commitment_text_hash: TreeMap[str, str]
+    commitment_deadline_ts: TreeMap[str, bigint]
+    commitment_verification_rule: TreeMap[str, str]
+    commitment_status: TreeMap[str, str]
+    commitment_evidence_hash: TreeMap[str, str]
+    commitment_grace_ends_ts: TreeMap[str, bigint]
+    protocol_missed_commitments_count: TreeMap[str, bigint]
 
     # Coverage / Enforcement
     pool_balance: TreeMap[str, bigint]
@@ -136,12 +158,50 @@ class CertLayerContract(gl.Contract):
         self.incident_status[incident_id] = "candidate"
         self.incident_decision[incident_id] = "pending"
         self.incident_protocol_id[incident_id] = protocol_id
+        self.incident_type[incident_id] = "availability"
         self.incident_start_ts[incident_id] = bigint(start_ts)
         self.incident_evidence_hash[incident_id] = evidence_hash
         self.incident_queue_wallets_csv[incident_id] = ""
         self.incident_queue_amounts_csv[incident_id] = ""
         self.incident_total_amount[incident_id] = bigint(0)
         self.incident_paid_count[incident_id] = bigint(0)
+        self.incident_recovery_pool[incident_id] = bigint(0)
+        self.incident_recovery_distributed[incident_id] = bigint(0)
+        self.incident_last_clean_block[incident_id] = bigint(0)
+        self.incident_trigger_sources[incident_id] = ""
+        self.incident_response_speed_score[incident_id] = bigint(0)
+        self.incident_communication_quality_score[incident_id] = bigint(0)
+        self.incident_pool_adequacy_score[incident_id] = bigint(0)
+        self.incident_post_mortem_score[incident_id] = bigint(0)
+        self.incident_recovery_effort_score[incident_id] = bigint(0)
+
+    @gl.public.write
+    def create_security_incident(
+        self,
+        incident_id: str,
+        protocol_id: str,
+        start_ts: int,
+        evidence_hash: str,
+        last_clean_block: int,
+        trigger_sources_csv: str,
+    ):
+        self.create_incident(incident_id, protocol_id, start_ts, evidence_hash)
+        self.incident_type[incident_id] = "security"
+        self.incident_last_clean_block[incident_id] = bigint(last_clean_block)
+        self.incident_trigger_sources[incident_id] = trigger_sources_csv
+
+    @gl.public.write
+    def set_last_clean_block(self, incident_id: str, block_number: int):
+        if incident_id not in self.incident_payload:
+            raise Exception("incident not found")
+        if block_number < 0:
+            raise Exception("invalid block number")
+        self.incident_last_clean_block[incident_id] = bigint(block_number)
+
+    @gl.public.write
+    def attach_loss_snapshot(self, incident_id: str, wallets_csv: str, losses_csv: str):
+        # Reuse common queue storage for security-loss based payouts.
+        self.attach_affected_users(incident_id, wallets_csv, losses_csv)
 
     @gl.public.write
     def attach_affected_users(self, incident_id: str, wallets_csv: str, amounts_csv: str):
@@ -265,6 +325,158 @@ class CertLayerContract(gl.Contract):
             self.incident_enforced[incident_id] = True
             self.incident_status[incident_id] = "paid"
 
+    @gl.public.write
+    def record_recovery(self, incident_id: str, amount: int):
+        if incident_id not in self.incident_payload:
+            raise Exception("incident not found")
+        if amount <= 0:
+            raise Exception("invalid recovery amount")
+        current = bigint(0)
+        if incident_id in self.incident_recovery_pool:
+            current = self.incident_recovery_pool[incident_id]
+        self.incident_recovery_pool[incident_id] = current + bigint(amount)
+
+    @gl.public.write
+    def distribute_recovery_batch(self, incident_id: str, start_index: int, limit: int):
+        if incident_id not in self.incident_payload:
+            raise Exception("incident not found")
+        if start_index < 0 or limit <= 0:
+            raise Exception("invalid batch range")
+
+        wallets_raw = self.incident_queue_wallets_csv[incident_id]
+        amounts_raw = self.incident_queue_amounts_csv[incident_id]
+        wallets = wallets_raw.split(",") if wallets_raw != "" else []
+        losses = amounts_raw.split(",") if amounts_raw != "" else []
+        if len(wallets) != len(losses):
+            raise Exception("corrupt loss snapshot")
+        total_loss = self.incident_total_amount[incident_id]
+        if total_loss <= bigint(0):
+            raise Exception("invalid total loss")
+
+        recovery_pool = self.incident_recovery_pool[incident_id]
+        distributed = self.incident_recovery_distributed[incident_id]
+        remaining = recovery_pool - distributed
+        if remaining <= bigint(0):
+            raise Exception("no recovery funds to distribute")
+
+        end_index = start_index + limit
+        if end_index > len(wallets):
+            end_index = len(wallets)
+
+        batch_amount = bigint(0)
+        for i in range(start_index, end_index):
+            loss_i = bigint(int(losses[i].strip()))
+            share = (remaining * loss_i) // total_loss
+            batch_amount = batch_amount + share
+
+        if batch_amount > remaining:
+            batch_amount = remaining
+
+        for i in range(start_index, end_index):
+            wallet = wallets[i].strip().lower()
+            loss_i = bigint(int(losses[i].strip()))
+            share = (remaining * loss_i) // total_loss
+            previous = bigint(0)
+            if wallet in self.wallet_compensation_balance:
+                previous = self.wallet_compensation_balance[wallet]
+            self.wallet_compensation_balance[wallet] = previous + share
+
+        self.incident_recovery_distributed[incident_id] = distributed + batch_amount
+
+    @gl.public.write
+    def set_hack_response_scores(
+        self,
+        incident_id: str,
+        response_speed: int,
+        communication_quality: int,
+        pool_adequacy: int,
+        post_mortem_quality: int,
+        recovery_effort: int,
+    ):
+        if incident_id not in self.incident_payload:
+            raise Exception("incident not found")
+        self.incident_response_speed_score[incident_id] = bigint(response_speed)
+        self.incident_communication_quality_score[incident_id] = bigint(communication_quality)
+        self.incident_pool_adequacy_score[incident_id] = bigint(pool_adequacy)
+        self.incident_post_mortem_score[incident_id] = bigint(post_mortem_quality)
+        self.incident_recovery_effort_score[incident_id] = bigint(recovery_effort)
+
+    @gl.public.write
+    def register_commitment(
+        self,
+        commitment_id: str,
+        protocol_id: str,
+        commitment_type: str,
+        source_url: str,
+        commitment_text_hash: str,
+        deadline_ts: int,
+        verification_rule: str,
+    ):
+        if commitment_id in self.commitment_protocol_id:
+            raise Exception("commitment already exists")
+        if protocol_id not in self.protocol_metadata:
+            raise Exception("protocol not found")
+        if deadline_ts <= 0:
+            raise Exception("invalid deadline")
+
+        self.commitment_protocol_id[commitment_id] = protocol_id
+        self.commitment_type[commitment_id] = commitment_type
+        self.commitment_source_url[commitment_id] = source_url
+        self.commitment_text_hash[commitment_id] = commitment_text_hash
+        self.commitment_deadline_ts[commitment_id] = bigint(deadline_ts)
+        self.commitment_verification_rule[commitment_id] = verification_rule
+        self.commitment_status[commitment_id] = "registered"
+        self.commitment_evidence_hash[commitment_id] = ""
+        self.commitment_grace_ends_ts[commitment_id] = bigint(0)
+
+    @gl.public.write
+    def evaluate_commitment(self, commitment_id: str, result: str, evidence_hash: str, current_ts: int):
+        if commitment_id not in self.commitment_protocol_id:
+            raise Exception("commitment not found")
+        if result != "fulfilled" and result != "partial" and result != "missed":
+            raise Exception("invalid result")
+
+        self.commitment_evidence_hash[commitment_id] = evidence_hash
+        if result == "missed":
+            # 7-day grace window before permanent non-compliance.
+            self.commitment_status[commitment_id] = "missed_grace"
+            self.commitment_grace_ends_ts[commitment_id] = bigint(current_ts + 604800)
+        else:
+            self.commitment_status[commitment_id] = result
+            self.commitment_grace_ends_ts[commitment_id] = bigint(0)
+
+    @gl.public.write
+    def submit_commitment_fulfillment_evidence(self, commitment_id: str, evidence_hash: str):
+        if commitment_id not in self.commitment_protocol_id:
+            raise Exception("commitment not found")
+        if self.commitment_status[commitment_id] != "missed_grace":
+            raise Exception("commitment not in grace window")
+        self.commitment_evidence_hash[commitment_id] = evidence_hash
+        self.commitment_status[commitment_id] = "fulfilled_grace"
+        self.commitment_grace_ends_ts[commitment_id] = bigint(0)
+
+    @gl.public.write
+    def finalize_commitment(self, commitment_id: str, current_ts: int):
+        if commitment_id not in self.commitment_protocol_id:
+            raise Exception("commitment not found")
+        if self.commitment_status[commitment_id] != "missed_grace":
+            raise Exception("commitment not pending grace finalization")
+        if bigint(current_ts) < self.commitment_grace_ends_ts[commitment_id]:
+            raise Exception("grace window still open")
+
+        self.commitment_status[commitment_id] = "missed_final"
+        protocol_id = self.commitment_protocol_id[commitment_id]
+        misses = bigint(0)
+        if protocol_id in self.protocol_missed_commitments_count:
+            misses = self.protocol_missed_commitments_count[protocol_id]
+        misses = misses + bigint(1)
+        self.protocol_missed_commitments_count[protocol_id] = misses
+
+        if misses >= bigint(3):
+            self.protocol_status[protocol_id] = "coverage_suspended"
+        elif misses >= bigint(2):
+            self.protocol_status[protocol_id] = "probationary"
+
     @gl.public.view
     def get_incident_payload(self, incident_id: str) -> str:
         if incident_id not in self.incident_payload:
@@ -302,6 +514,12 @@ class CertLayerContract(gl.Contract):
         return self.incident_protocol_id[incident_id]
 
     @gl.public.view
+    def get_incident_type(self, incident_id: str) -> str:
+        if incident_id not in self.incident_type:
+            return ""
+        return self.incident_type[incident_id]
+
+    @gl.public.view
     def get_incident_challenge_ends_ts(self, incident_id: str) -> int:
         if incident_id not in self.incident_challenge_ends_ts:
             return 0
@@ -320,6 +538,43 @@ class CertLayerContract(gl.Contract):
         return int(self.incident_paid_count[incident_id])
 
     @gl.public.view
+    def get_incident_recovery_pool(self, incident_id: str) -> int:
+        if incident_id not in self.incident_recovery_pool:
+            return 0
+        return int(self.incident_recovery_pool[incident_id])
+
+    @gl.public.view
+    def get_incident_recovery_distributed(self, incident_id: str) -> int:
+        if incident_id not in self.incident_recovery_distributed:
+            return 0
+        return int(self.incident_recovery_distributed[incident_id])
+
+    @gl.public.view
+    def get_last_clean_block(self, incident_id: str) -> int:
+        if incident_id not in self.incident_last_clean_block:
+            return 0
+        return int(self.incident_last_clean_block[incident_id])
+
+    @gl.public.view
+    def get_trigger_sources(self, incident_id: str) -> str:
+        if incident_id not in self.incident_trigger_sources:
+            return ""
+        return self.incident_trigger_sources[incident_id]
+
+    @gl.public.view
+    def get_hack_response_score_average(self, incident_id: str) -> int:
+        if incident_id not in self.incident_payload:
+            return 0
+        total = (
+            self.incident_response_speed_score[incident_id]
+            + self.incident_communication_quality_score[incident_id]
+            + self.incident_pool_adequacy_score[incident_id]
+            + self.incident_post_mortem_score[incident_id]
+            + self.incident_recovery_effort_score[incident_id]
+        )
+        return int(total // bigint(5))
+
+    @gl.public.view
     def get_dispute_decision(self, incident_id: str, wallet: str) -> str:
         key = self._dispute_key(incident_id, wallet)
         if key not in self.incident_dispute_decision:
@@ -332,6 +587,30 @@ class CertLayerContract(gl.Contract):
         if key not in self.wallet_compensation_balance:
             return 0
         return int(self.wallet_compensation_balance[key])
+
+    @gl.public.view
+    def get_commitment_status(self, commitment_id: str) -> str:
+        if commitment_id not in self.commitment_status:
+            return ""
+        return self.commitment_status[commitment_id]
+
+    @gl.public.view
+    def get_commitment_protocol_id(self, commitment_id: str) -> str:
+        if commitment_id not in self.commitment_protocol_id:
+            return ""
+        return self.commitment_protocol_id[commitment_id]
+
+    @gl.public.view
+    def get_commitment_grace_ends_ts(self, commitment_id: str) -> int:
+        if commitment_id not in self.commitment_grace_ends_ts:
+            return 0
+        return int(self.commitment_grace_ends_ts[commitment_id])
+
+    @gl.public.view
+    def get_protocol_missed_commitments_count(self, protocol_id: str) -> int:
+        if protocol_id not in self.protocol_missed_commitments_count:
+            return 0
+        return int(self.protocol_missed_commitments_count[protocol_id])
 
     # ----------------------------
     # Coverage / Enforcement

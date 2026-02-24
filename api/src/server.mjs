@@ -527,6 +527,199 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { ok: true, mode: "local" });
     }
 
+    if (req.method === "POST" && pathname === "/v1/security-incidents/create") {
+      const body = await readBody(req);
+      if (!body.protocolId) return send(res, 400, { error: "protocolId required" });
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
+
+      const incidentId = body.incidentId || `sec-${Date.now()}`;
+      const startTs = Number(body.startTs || Math.floor(Date.now() / 1000));
+      const evidenceHash = body.evidenceHash || "";
+      const lastCleanBlock = Number(body.lastCleanBlock || 0);
+      const triggerSourcesCsv = body.triggerSourcesCsv || "";
+
+      if (LIVE_MODE) {
+        const onchain = await contractWrite("create_security_incident", [
+          incidentId,
+          body.protocolId,
+          startTs,
+          evidenceHash,
+          lastCleanBlock,
+          triggerSourcesCsv,
+        ]);
+        return send(res, 201, { ok: true, incidentId, onchain });
+      }
+
+      return send(res, 201, { ok: true, incidentId, mode: "local" });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/security-incidents/loss-snapshot") {
+      const body = await readBody(req);
+      if (!body.protocolId || !body.incidentId || !body.walletsCsv || !body.lossesCsv) {
+        return send(res, 400, { error: "protocolId, incidentId, walletsCsv, lossesCsv required" });
+      }
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
+
+      if (LIVE_MODE) {
+        const onchain = await contractWrite("attach_loss_snapshot", [
+          body.incidentId,
+          body.walletsCsv,
+          body.lossesCsv,
+        ]);
+        return send(res, 200, { ok: true, onchain });
+      }
+
+      return send(res, 200, { ok: true, mode: "local" });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/security-incidents/recovery/record") {
+      const body = await readBody(req);
+      if (!body.protocolId || !body.incidentId || body.amount === undefined) {
+        return send(res, 400, { error: "protocolId, incidentId, amount required" });
+      }
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
+
+      if (LIVE_MODE) {
+        const onchain = await contractWrite("record_recovery", [
+          body.incidentId,
+          Number(body.amount),
+        ]);
+        return send(res, 200, { ok: true, onchain });
+      }
+
+      return send(res, 200, { ok: true, mode: "local" });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/security-incidents/recovery/distribute") {
+      const body = await readBody(req);
+      if (!body.protocolId || !body.incidentId) {
+        return send(res, 400, { error: "protocolId and incidentId required" });
+      }
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
+      const startIndex = Number(body.startIndex ?? 0);
+      const limit = Number(body.limit ?? 20);
+
+      if (LIVE_MODE) {
+        const onchain = await contractWrite("distribute_recovery_batch", [
+          body.incidentId,
+          startIndex,
+          limit,
+        ]);
+        return send(res, 200, { ok: true, onchain });
+      }
+
+      return send(res, 200, { ok: true, mode: "local" });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/security-incidents/response-score") {
+      const body = await readBody(req);
+      if (!body.protocolId || !body.incidentId) {
+        return send(res, 400, { error: "protocolId and incidentId required" });
+      }
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
+
+      if (LIVE_MODE) {
+        const onchain = await contractWrite("set_hack_response_scores", [
+          body.incidentId,
+          Number(body.responseSpeed ?? 0),
+          Number(body.communicationQuality ?? 0),
+          Number(body.poolAdequacy ?? 0),
+          Number(body.postMortemQuality ?? 0),
+          Number(body.recoveryEffort ?? 0),
+        ]);
+        return send(res, 200, { ok: true, onchain });
+      }
+
+      return send(res, 200, { ok: true, mode: "local" });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/commitments/register") {
+      const body = await readBody(req);
+      if (!body.protocolId || !body.commitmentId || !body.commitmentType || !body.deadlineTs) {
+        return send(res, 400, { error: "protocolId, commitmentId, commitmentType, deadlineTs required" });
+      }
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
+
+      if (LIVE_MODE) {
+        const onchain = await contractWrite("register_commitment", [
+          body.commitmentId,
+          body.protocolId,
+          body.commitmentType,
+          body.sourceUrl || "",
+          body.commitmentTextHash || "",
+          Number(body.deadlineTs),
+          body.verificationRule || "",
+        ]);
+        return send(res, 201, { ok: true, onchain });
+      }
+
+      return send(res, 201, { ok: true, mode: "local" });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/commitments/evaluate") {
+      const body = await readBody(req);
+      if (!body.protocolId || !body.commitmentId || !body.result) {
+        return send(res, 400, { error: "protocolId, commitmentId, result required" });
+      }
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
+      const nowTs = Math.floor(Date.now() / 1000);
+
+      if (LIVE_MODE) {
+        const onchain = await contractWrite("evaluate_commitment", [
+          body.commitmentId,
+          body.result,
+          body.evidenceHash || "",
+          nowTs,
+        ]);
+        return send(res, 200, { ok: true, onchain });
+      }
+
+      return send(res, 200, { ok: true, mode: "local" });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/commitments/evidence") {
+      const body = await readBody(req);
+      if (!body.protocolId || !body.commitmentId) {
+        return send(res, 400, { error: "protocolId and commitmentId required" });
+      }
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
+
+      if (LIVE_MODE) {
+        const onchain = await contractWrite("submit_commitment_fulfillment_evidence", [
+          body.commitmentId,
+          body.evidenceHash || "",
+        ]);
+        return send(res, 200, { ok: true, onchain });
+      }
+
+      return send(res, 200, { ok: true, mode: "local" });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/commitments/finalize") {
+      const body = await readBody(req);
+      if (!body.protocolId || !body.commitmentId) {
+        return send(res, 400, { error: "protocolId and commitmentId required" });
+      }
+      const authz = enforceProtocolOwnership(req, body.protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
+      const nowTs = Math.floor(Date.now() / 1000);
+
+      if (LIVE_MODE) {
+        const onchain = await contractWrite("finalize_commitment", [body.commitmentId, nowTs]);
+        return send(res, 200, { ok: true, onchain });
+      }
+
+      return send(res, 200, { ok: true, mode: "local" });
+    }
+
     if (req.method === "POST" && pathname === "/v1/incidents/decision") {
       const body = await readBody(req);
       if (!body.incidentId || !body.decision) {
