@@ -16,6 +16,12 @@ import {
 const PORT = Number(process.env.PORT || 8080);
 const SERVICE_NAME = process.env.SERVICE_NAME || "certlayer-api";
 const API_KEY = process.env.API_KEY || "";
+const ADMIN_WALLETS = new Set(
+  (process.env.ADMIN_WALLETS || "")
+    .split(",")
+    .map((w) => w.trim().toLowerCase())
+    .filter(Boolean)
+);
 
 const GENLAYER_RPC_URL = process.env.GENLAYER_RPC_URL || "https://studio.genlayer.com/api";
 const GENLAYER_CHAIN = (process.env.GENLAYER_CHAIN || "studionet").toLowerCase();
@@ -59,6 +65,10 @@ function normalizeWallet(wallet) {
   return wallet.toLowerCase();
 }
 
+function isAdminWallet(wallet) {
+  return ADMIN_WALLETS.has(normalizeWallet(wallet));
+}
+
 function extractSessionToken(req) {
   const authHeader = req.headers.authorization || "";
   if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
@@ -98,6 +108,11 @@ function hasInternalAccess(req) {
   return checkAuth(req);
 }
 
+function hasAdminSession(req) {
+  const session = getSession(req);
+  return Boolean(session && session.role === "admin");
+}
+
 function canAccessWrite(req, pathname) {
   if (isPublicPostRoute(pathname)) return true;
   if (hasInternalAccess(req)) return true;
@@ -110,6 +125,7 @@ function enforceProtocolOwnership(req, protocolId) {
 
   const session = getSession(req);
   if (!session) return { ok: false, status: 401, error: "session required" };
+  if (session.role === "admin") return { ok: true, session };
 
   const protocol = findProtocol(protocolId);
   if (!protocol) return { ok: false, status: 404, error: "protocol not found" };
@@ -258,7 +274,7 @@ const server = createServer(async (req, res) => {
       walletNonces.delete(wallet);
       const token = randomBytes(32).toString("hex");
       const expiresAt = Date.now() + SESSION_TTL_MS;
-      const role = "owner";
+      const role = isAdminWallet(wallet) ? "admin" : "owner";
       sessions.set(token, { wallet, role, expiresAt });
 
       return send(res, 200, {
@@ -331,7 +347,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && pathname === "/v1/protocols") {
-      if (hasInternalAccess(req)) {
+      if (hasInternalAccess(req) || hasAdminSession(req)) {
         return send(res, 200, { items: db.protocols });
       }
       const session = getSession(req);
@@ -530,7 +546,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && pathname === "/v1/incidents") {
-      if (hasInternalAccess(req)) return send(res, 200, { items: db.incidents });
+      if (hasInternalAccess(req) || hasAdminSession(req)) return send(res, 200, { items: db.incidents });
       const session = getSession(req);
       if (!session) return send(res, 401, { error: "session required" });
       const owned = listProtocolsByOwnerWallet(session.wallet).map((p) => p.id);
@@ -603,7 +619,7 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === "GET" && pathname === "/v1/reputation/protocols") {
-      const visibleProtocols = hasInternalAccess(req)
+      const visibleProtocols = hasInternalAccess(req) || hasAdminSession(req)
         ? db.protocols
         : (() => {
             const session = getSession(req);
@@ -611,7 +627,7 @@ const server = createServer(async (req, res) => {
             return listProtocolsByOwnerWallet(session.wallet);
           })();
 
-      if (!hasInternalAccess(req) && visibleProtocols.length === 0) {
+      if (!(hasInternalAccess(req) || hasAdminSession(req)) && visibleProtocols.length === 0) {
         const session = getSession(req);
         if (!session) return send(res, 401, { error: "session required" });
       }

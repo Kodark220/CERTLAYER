@@ -8,7 +8,6 @@ type View = "landing" | "protocol" | "api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 const PUBLIC_API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
-const SHOW_INTERNAL_CONTROLS = process.env.NEXT_PUBLIC_SHOW_INTERNAL_CONTROLS === "true";
 
 type AuthSession = {
   token: string;
@@ -51,6 +50,7 @@ export default function HomePage() {
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
   const [lifecycleError, setLifecycleError] = useState("");
   const [lifecycleLog, setLifecycleLog] = useState<string[]>([]);
+  const canSeeInternalControls = session?.role === "admin";
 
   const headline = useMemo(
     () => "You verify. You trigger. You enforce.",
@@ -318,7 +318,7 @@ export default function HomePage() {
             {registerError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{registerError}</p> : null}
           </div>
         </section>
-        {SHOW_INTERNAL_CONTROLS ? (
+        {canSeeInternalControls ? (
           <section className="card">
             <h3>Incident Lifecycle</h3>
             <p>Create incident, attach affected users, challenge/dispute, finalize, payout batch.</p>
