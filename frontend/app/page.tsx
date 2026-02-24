@@ -51,6 +51,39 @@ export default function HomePage() {
   const [lifecycleError, setLifecycleError] = useState("");
   const [lifecycleLog, setLifecycleLog] = useState<string[]>([]);
   const canSeeInternalControls = session?.role === "admin";
+  const [commitmentForm, setCommitmentForm] = useState({
+    commitmentId: "",
+    commitmentType: "governance",
+    sourceUrl: "",
+    commitmentTextHash: "",
+    deadlineTs: "",
+    verificationRule: "",
+    result: "fulfilled",
+    evidenceHash: "",
+  });
+  const [commitmentLoading, setCommitmentLoading] = useState(false);
+  const [commitmentError, setCommitmentError] = useState("");
+  const [commitmentLog, setCommitmentLog] = useState<string[]>([]);
+  const [securityForm, setSecurityForm] = useState({
+    incidentId: "",
+    startTs: "",
+    evidenceHash: "",
+    lastCleanBlock: "",
+    triggerSourcesCsv: "",
+    walletsCsv: "",
+    lossesCsv: "",
+    recoveryAmount: "",
+    recoveryStartIndex: "0",
+    recoveryLimit: "20",
+    responseSpeed: "0",
+    communicationQuality: "0",
+    poolAdequacy: "0",
+    postMortemQuality: "0",
+    recoveryEffort: "0",
+  });
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityError, setSecurityError] = useState("");
+  const [securityLog, setSecurityLog] = useState<string[]>([]);
 
   const headline = useMemo(
     () => "You verify. You trigger. You enforce.",
@@ -223,6 +256,61 @@ export default function HomePage() {
       setLifecycleError(message);
     } finally {
       setLifecycleLoading(false);
+    }
+  }
+
+  async function runCommitmentAction(path: string, payload: Record<string, unknown>, label: string) {
+    if (!session || !canSeeInternalControls) {
+      setCommitmentError("Admin session required.");
+      return;
+    }
+    const protocolId = activeProtocolId.trim();
+    if (!protocolId) {
+      setCommitmentError("Set Active Protocol ID first.");
+      return;
+    }
+    setCommitmentError("");
+    setCommitmentLoading(true);
+    try {
+      const res = await postJson(path, { ...payload, protocolId }, session.token);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `${label} failed`);
+      const tx = data.onchain?.txHash ? ` tx=${data.onchain.txHash}` : "";
+      setCommitmentLog((prev) => [`${label} success${tx}`, ...prev].slice(0, 20));
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : `${label} failed`;
+      setCommitmentError(msg);
+    } finally {
+      setCommitmentLoading(false);
+    }
+  }
+
+  async function runSecurityAction(path: string, payload: Record<string, unknown>, label: string) {
+    if (!session || !canSeeInternalControls) {
+      setSecurityError("Admin session required.");
+      return;
+    }
+    const protocolId = activeProtocolId.trim();
+    if (!protocolId) {
+      setSecurityError("Set Active Protocol ID first.");
+      return;
+    }
+    setSecurityError("");
+    setSecurityLoading(true);
+    try {
+      const res = await postJson(path, { ...payload, protocolId }, session.token);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `${label} failed`);
+      const tx = data.onchain?.txHash ? ` tx=${data.onchain.txHash}` : "";
+      setSecurityLog((prev) => [`${label} success${tx}`, ...prev].slice(0, 20));
+      if (path === "/v1/security-incidents/create" && data.incidentId) {
+        setSecurityForm((p) => ({ ...p, incidentId: data.incidentId }));
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : `${label} failed`;
+      setSecurityError(msg);
+    } finally {
+      setSecurityLoading(false);
     }
   }
 
@@ -533,6 +621,366 @@ export default function HomePage() {
                   <label className="label">Lifecycle Log</label>
                   <div className="grid">
                     {lifecycleLog.map((line, idx) => (
+                      <div key={`${line}-${idx}`} className="kpi" style={{ fontSize: 12 }}>
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+        {canSeeInternalControls ? (
+          <section className="card">
+            <h3>Commitments (Admin)</h3>
+            <div className="grid">
+              <div>
+                <label className="label">Commitment ID</label>
+                <input
+                  value={commitmentForm.commitmentId}
+                  onChange={(e) => setCommitmentForm((p) => ({ ...p, commitmentId: e.target.value }))}
+                  placeholder="commit-001"
+                />
+              </div>
+              <div>
+                <label className="label">Type</label>
+                <select
+                  value={commitmentForm.commitmentType}
+                  onChange={(e) => setCommitmentForm((p) => ({ ...p, commitmentType: e.target.value }))}
+                >
+                  <option value="governance">governance</option>
+                  <option value="roadmap">roadmap</option>
+                  <option value="financial">financial</option>
+                  <option value="security">security</option>
+                  <option value="communication">communication</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Source URL</label>
+                <input
+                  value={commitmentForm.sourceUrl}
+                  onChange={(e) => setCommitmentForm((p) => ({ ...p, sourceUrl: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Commitment Text Hash</label>
+                <input
+                  value={commitmentForm.commitmentTextHash}
+                  onChange={(e) => setCommitmentForm((p) => ({ ...p, commitmentTextHash: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Deadline TS (unix)</label>
+                <input
+                  value={commitmentForm.deadlineTs}
+                  onChange={(e) => setCommitmentForm((p) => ({ ...p, deadlineTs: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Verification Rule</label>
+                <input
+                  value={commitmentForm.verificationRule}
+                  onChange={(e) => setCommitmentForm((p) => ({ ...p, verificationRule: e.target.value }))}
+                />
+              </div>
+              <button
+                disabled={commitmentLoading}
+                onClick={() =>
+                  runCommitmentAction(
+                    "/v1/commitments/register",
+                    {
+                      commitmentId: commitmentForm.commitmentId,
+                      commitmentType: commitmentForm.commitmentType,
+                      sourceUrl: commitmentForm.sourceUrl,
+                      commitmentTextHash: commitmentForm.commitmentTextHash,
+                      deadlineTs: Number(commitmentForm.deadlineTs),
+                      verificationRule: commitmentForm.verificationRule,
+                    },
+                    "Register commitment"
+                  )
+                }
+              >
+                {commitmentLoading ? "Running..." : "Register Commitment"}
+              </button>
+              <div>
+                <label className="label">Evaluate Result</label>
+                <select
+                  value={commitmentForm.result}
+                  onChange={(e) => setCommitmentForm((p) => ({ ...p, result: e.target.value }))}
+                >
+                  <option value="fulfilled">fulfilled</option>
+                  <option value="partial">partial</option>
+                  <option value="missed">missed</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Evidence Hash</label>
+                <input
+                  value={commitmentForm.evidenceHash}
+                  onChange={(e) => setCommitmentForm((p) => ({ ...p, evidenceHash: e.target.value }))}
+                />
+              </div>
+              <button
+                disabled={commitmentLoading}
+                onClick={() =>
+                  runCommitmentAction(
+                    "/v1/commitments/evaluate",
+                    {
+                      commitmentId: commitmentForm.commitmentId,
+                      result: commitmentForm.result,
+                      evidenceHash: commitmentForm.evidenceHash,
+                    },
+                    "Evaluate commitment"
+                  )
+                }
+              >
+                {commitmentLoading ? "Running..." : "Evaluate Commitment"}
+              </button>
+              <button
+                disabled={commitmentLoading}
+                onClick={() =>
+                  runCommitmentAction(
+                    "/v1/commitments/evidence",
+                    {
+                      commitmentId: commitmentForm.commitmentId,
+                      evidenceHash: commitmentForm.evidenceHash,
+                    },
+                    "Submit fulfillment evidence"
+                  )
+                }
+              >
+                {commitmentLoading ? "Running..." : "Submit Grace Evidence"}
+              </button>
+              <button
+                disabled={commitmentLoading}
+                onClick={() =>
+                  runCommitmentAction(
+                    "/v1/commitments/finalize",
+                    { commitmentId: commitmentForm.commitmentId },
+                    "Finalize commitment"
+                  )
+                }
+              >
+                {commitmentLoading ? "Running..." : "Finalize Commitment"}
+              </button>
+              {commitmentError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{commitmentError}</p> : null}
+              {commitmentLog.length > 0 ? (
+                <div>
+                  <label className="label">Commitment Log</label>
+                  <div className="grid">
+                    {commitmentLog.map((line, idx) => (
+                      <div key={`${line}-${idx}`} className="kpi" style={{ fontSize: 12 }}>
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+        {canSeeInternalControls ? (
+          <section className="card">
+            <h3>Security & Recovery (Admin)</h3>
+            <div className="grid">
+              <div>
+                <label className="label">Security Incident ID</label>
+                <input
+                  value={securityForm.incidentId}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, incidentId: e.target.value }))}
+                  placeholder="sec-001"
+                />
+              </div>
+              <div>
+                <label className="label">Start TS (unix)</label>
+                <input
+                  value={securityForm.startTs}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, startTs: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Evidence Hash</label>
+                <input
+                  value={securityForm.evidenceHash}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, evidenceHash: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Last Clean Block</label>
+                <input
+                  value={securityForm.lastCleanBlock}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, lastCleanBlock: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Trigger Sources CSV</label>
+                <input
+                  value={securityForm.triggerSourcesCsv}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, triggerSourcesCsv: e.target.value }))}
+                  placeholder="official,peckshield"
+                />
+              </div>
+              <button
+                disabled={securityLoading}
+                onClick={() =>
+                  runSecurityAction(
+                    "/v1/security-incidents/create",
+                    {
+                      incidentId: securityForm.incidentId || undefined,
+                      startTs: securityForm.startTs ? Number(securityForm.startTs) : undefined,
+                      evidenceHash: securityForm.evidenceHash,
+                      lastCleanBlock: Number(securityForm.lastCleanBlock || 0),
+                      triggerSourcesCsv: securityForm.triggerSourcesCsv,
+                    },
+                    "Create security incident"
+                  )
+                }
+              >
+                {securityLoading ? "Running..." : "Create Security Incident"}
+              </button>
+              <div>
+                <label className="label">Loss Wallets CSV</label>
+                <input
+                  value={securityForm.walletsCsv}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, walletsCsv: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Loss Amounts CSV</label>
+                <input
+                  value={securityForm.lossesCsv}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, lossesCsv: e.target.value }))}
+                />
+              </div>
+              <button
+                disabled={securityLoading}
+                onClick={() =>
+                  runSecurityAction(
+                    "/v1/security-incidents/loss-snapshot",
+                    {
+                      incidentId: securityForm.incidentId,
+                      walletsCsv: securityForm.walletsCsv,
+                      lossesCsv: securityForm.lossesCsv,
+                    },
+                    "Attach loss snapshot"
+                  )
+                }
+              >
+                {securityLoading ? "Running..." : "Attach Loss Snapshot"}
+              </button>
+              <div>
+                <label className="label">Recovery Amount</label>
+                <input
+                  value={securityForm.recoveryAmount}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, recoveryAmount: e.target.value }))}
+                />
+              </div>
+              <button
+                disabled={securityLoading}
+                onClick={() =>
+                  runSecurityAction(
+                    "/v1/security-incidents/recovery/record",
+                    {
+                      incidentId: securityForm.incidentId,
+                      amount: Number(securityForm.recoveryAmount || 0),
+                    },
+                    "Record recovery"
+                  )
+                }
+              >
+                {securityLoading ? "Running..." : "Record Recovery"}
+              </button>
+              <div>
+                <label className="label">Recovery Start Index</label>
+                <input
+                  value={securityForm.recoveryStartIndex}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, recoveryStartIndex: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Recovery Limit</label>
+                <input
+                  value={securityForm.recoveryLimit}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, recoveryLimit: e.target.value }))}
+                />
+              </div>
+              <button
+                disabled={securityLoading}
+                onClick={() =>
+                  runSecurityAction(
+                    "/v1/security-incidents/recovery/distribute",
+                    {
+                      incidentId: securityForm.incidentId,
+                      startIndex: Number(securityForm.recoveryStartIndex || 0),
+                      limit: Number(securityForm.recoveryLimit || 20),
+                    },
+                    "Distribute recovery batch"
+                  )
+                }
+              >
+                {securityLoading ? "Running..." : "Distribute Recovery Batch"}
+              </button>
+              <div>
+                <label className="label">Response Speed</label>
+                <input
+                  value={securityForm.responseSpeed}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, responseSpeed: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Communication Quality</label>
+                <input
+                  value={securityForm.communicationQuality}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, communicationQuality: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Pool Adequacy</label>
+                <input
+                  value={securityForm.poolAdequacy}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, poolAdequacy: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Post-Mortem Quality</label>
+                <input
+                  value={securityForm.postMortemQuality}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, postMortemQuality: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="label">Recovery Effort</label>
+                <input
+                  value={securityForm.recoveryEffort}
+                  onChange={(e) => setSecurityForm((p) => ({ ...p, recoveryEffort: e.target.value }))}
+                />
+              </div>
+              <button
+                disabled={securityLoading}
+                onClick={() =>
+                  runSecurityAction(
+                    "/v1/security-incidents/response-score",
+                    {
+                      incidentId: securityForm.incidentId,
+                      responseSpeed: Number(securityForm.responseSpeed || 0),
+                      communicationQuality: Number(securityForm.communicationQuality || 0),
+                      poolAdequacy: Number(securityForm.poolAdequacy || 0),
+                      postMortemQuality: Number(securityForm.postMortemQuality || 0),
+                      recoveryEffort: Number(securityForm.recoveryEffort || 0),
+                    },
+                    "Set hack response scores"
+                  )
+                }
+              >
+                {securityLoading ? "Running..." : "Set Hack Response Scores"}
+              </button>
+              {securityError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{securityError}</p> : null}
+              {securityLog.length > 0 ? (
+                <div>
+                  <label className="label">Security Log</label>
+                  <div className="grid">
+                    {securityLog.map((line, idx) => (
                       <div key={`${line}-${idx}`} className="kpi" style={{ fontSize: 12 }}>
                         {line}
                       </div>
