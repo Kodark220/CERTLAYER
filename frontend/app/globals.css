@@ -77,3 +77,26 @@ input, select {
   font-size: 20px;
   margin-top: 4px;
 }
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid rgba(120, 176, 224, 0.2);
+  text-align: left;
+  padding: 10px 8px;
+  font-size: 14px;
+}
+
+.data-table th {
+  color: #b7cae2;
+  font-weight: 600;
+}

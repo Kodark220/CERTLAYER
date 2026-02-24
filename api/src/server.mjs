@@ -180,6 +180,36 @@ const server = createServer(async (req, res) => {
       });
     }
 
+    if (req.method === "GET" && pathname === "/v1/public/reputation") {
+      const items = db.protocols.map((p) => {
+        const score = db.scores.find((s) => s.protocolId === p.id) || {
+          score: 0,
+          grade: "N/A",
+          updatedAt: null,
+        };
+        const incidents = db.incidents.filter((i) => i.protocolId === p.id);
+        return {
+          protocolId: p.id,
+          name: p.name,
+          protocolType: p.protocolType,
+          uptimeBps: Number(p.uptimeBps || 0),
+          score: score.score,
+          grade: score.grade,
+          incidentCount: incidents.length,
+          openIncidentCount: incidents.filter((i) => i.status === "open").length,
+          updatedAt: score.updatedAt,
+        };
+      });
+
+      return send(res, 200, {
+        items,
+        totals: {
+          protocolCount: items.length,
+          incidentCount: db.incidents.length,
+        },
+      });
+    }
+
     if (req.method === "POST" && pathname === "/v1/auth/wallet/nonce") {
       const body = await readBody(req);
       const wallet = normalizeWallet(body.wallet || "");

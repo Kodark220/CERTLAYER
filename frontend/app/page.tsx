@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type Mode = "wallet" | "email";
 type View = "landing" | "protocol" | "api";
@@ -302,6 +303,11 @@ export default function HomePage() {
             <div className="kpi">Protocols monitored<strong>0</strong></div>
             <div className="kpi">Compensation executed<strong>0 USDC</strong></div>
             <div className="kpi">Endpoints watched<strong>0</strong></div>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <Link href="/explorer">
+              <button>View Public Reputation Explorer</button>
+            </Link>
           </div>
         </article>
 
