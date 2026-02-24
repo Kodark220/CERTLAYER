@@ -6,6 +6,7 @@ type Mode = "wallet" | "email";
 type View = "landing" | "protocol" | "api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+const PUBLIC_API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
 type AuthSession = {
   token: string;
@@ -59,6 +60,20 @@ export default function HomePage() {
       });
   }, []);
 
+  async function postJson(path: string, body: Record<string, unknown>, token?: string) {
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+    };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (PUBLIC_API_KEY) headers["x-api-key"] = PUBLIC_API_KEY;
+
+    return fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+  }
+
   async function signInWithMetaMask() {
     setAuthError("");
     setLoadingAuth(true);
@@ -76,11 +91,7 @@ export default function HomePage() {
         throw new Error("No wallet selected");
       }
 
-      const nonceRes = await fetch(`${API_BASE_URL}/v1/auth/wallet/nonce`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ wallet }),
-      });
+      const nonceRes = await postJson("/v1/auth/wallet/nonce", { wallet });
       if (!nonceRes.ok) {
         const e = await nonceRes.json();
         throw new Error(e.error || "Failed to request nonce");
@@ -92,11 +103,7 @@ export default function HomePage() {
         params: [nonceData.message, wallet],
       });
 
-      const verifyRes = await fetch(`${API_BASE_URL}/v1/auth/wallet/verify`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ wallet, signature }),
-      });
+      const verifyRes = await postJson("/v1/auth/wallet/verify", { wallet, signature });
       if (!verifyRes.ok) {
         const e = await verifyRes.json();
         throw new Error(e.error || "Wallet verification failed");
@@ -142,20 +149,17 @@ export default function HomePage() {
     setRegisterTxHash("");
     setRegisterLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/v1/protocols/register`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          Authorization: `Bearer ${session.token}`,
-        },
-        body: JSON.stringify({
+      const res = await postJson(
+        "/v1/protocols/register",
+        {
           id: registerForm.id || undefined,
           name: registerForm.name,
           website: registerForm.website,
           protocolType: registerForm.protocolType,
           uptimeBps: Number(registerForm.uptimeBps),
-        }),
-      });
+        },
+        session.token
+      );
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || "Registration failed");
