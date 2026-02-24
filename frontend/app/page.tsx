@@ -8,6 +8,7 @@ type View = "landing" | "protocol" | "api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 const PUBLIC_API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
+const SHOW_INTERNAL_CONTROLS = process.env.NEXT_PUBLIC_SHOW_INTERNAL_CONTROLS === "true";
 
 type AuthSession = {
   token: string;
@@ -317,10 +318,11 @@ export default function HomePage() {
             {registerError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{registerError}</p> : null}
           </div>
         </section>
-        <section className="card">
-          <h3>Incident Lifecycle</h3>
-          <p>Create incident, attach affected users, challenge/dispute, finalize, payout batch.</p>
-          <div className="grid">
+        {SHOW_INTERNAL_CONTROLS ? (
+          <section className="card">
+            <h3>Incident Lifecycle</h3>
+            <p>Create incident, attach affected users, challenge/dispute, finalize, payout batch.</p>
+            <div className="grid">
             <div>
               <label className="label">Incident ID</label>
               <input
@@ -524,20 +526,21 @@ export default function HomePage() {
             </button>
 
             {lifecycleError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{lifecycleError}</p> : null}
-            {lifecycleLog.length > 0 ? (
-              <div>
-                <label className="label">Lifecycle Log</label>
-                <div className="grid">
-                  {lifecycleLog.map((line, idx) => (
-                    <div key={`${line}-${idx}`} className="kpi" style={{ fontSize: 12 }}>
-                      {line}
-                    </div>
-                  ))}
+              {lifecycleLog.length > 0 ? (
+                <div>
+                  <label className="label">Lifecycle Log</label>
+                  <div className="grid">
+                    {lifecycleLog.map((line, idx) => (
+                      <div key={`${line}-${idx}`} className="kpi" style={{ fontSize: 12 }}>
+                        {line}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : null}
-          </div>
-        </section>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
         <section className="card">
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => setView("landing")}>Back</button>
