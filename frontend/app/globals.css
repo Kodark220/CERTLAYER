@@ -1,0 +1,79 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: radial-gradient(circle at 20% 20%, #11374f 0%, #070b13 45%, #05070d 100%);
+  color: #e6edf6;
+}
+
+a {
+  color: inherit;
+}
+
+.shell {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.card {
+  border: 1px solid rgba(120, 176, 224, 0.24);
+  background: rgba(8, 16, 29, 0.72);
+  border-radius: 14px;
+  padding: 18px;
+}
+
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.grid-2 {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+button {
+  border: 1px solid rgba(125, 196, 255, 0.35);
+  background: linear-gradient(135deg, #0d5e87, #1f355f);
+  color: #eef7ff;
+  border-radius: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+input, select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(121, 170, 215, 0.35);
+  background: rgba(5, 13, 24, 0.88);
+  color: #e6edf6;
+}
+
+.label {
+  font-size: 12px;
+  color: #a9bdd4;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.kpi {
+  border: 1px solid rgba(120, 176, 224, 0.24);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(6, 13, 24, 0.6);
+}
+
+.kpi strong {
+  display: block;
+  font-size: 20px;
+  margin-top: 4px;
+}
