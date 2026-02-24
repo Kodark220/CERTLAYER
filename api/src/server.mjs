@@ -83,7 +83,7 @@ function createNonceMessage(wallet, nonce) {
 }
 
 function isPublicPostRoute(pathname) {
-  return pathname === "/v1/auth/wallet/nonce" || pathname === "/v1/auth/wallet/verify";
+  return pathname === "/v1/auth/wallet/nonce" || pathname === "/v1/auth/wallet/verify" || pathname.startsWith("/v1/auth/");
 }
 
 function hasInternalAccess(req) {
@@ -133,14 +133,15 @@ async function contractWrite(functionName, args) {
 const server = createServer(async (req, res) => {
   try {
     const url = new URL(req.url || "/", `http://${req.headers.host}`);
+    const pathname = url.pathname.replace(/\/+$/, "") || "/";
 
     if (req.method === "OPTIONS") return send(res, 204, {});
 
-    if (req.method !== "GET" && !canAccessWrite(req, url.pathname)) {
+    if (req.method !== "GET" && !canAccessWrite(req, pathname)) {
       return send(res, 401, { error: "unauthorized" });
     }
 
-    if (req.method === "GET" && url.pathname === "/health") {
+    if (req.method === "GET" && pathname === "/health") {
       return send(res, 200, {
         ok: true,
         service: SERVICE_NAME,
@@ -155,7 +156,7 @@ const server = createServer(async (req, res) => {
       });
     }
 
-    if (req.method === "POST" && url.pathname === "/v1/auth/wallet/nonce") {
+    if (req.method === "POST" && pathname === "/v1/auth/wallet/nonce") {
       const body = await readBody(req);
       const wallet = normalizeWallet(body.wallet || "");
       if (!isValidWallet(wallet)) {
@@ -174,7 +175,7 @@ const server = createServer(async (req, res) => {
       });
     }
 
-    if (req.method === "POST" && url.pathname === "/v1/auth/wallet/verify") {
+    if (req.method === "POST" && pathname === "/v1/auth/wallet/verify") {
       const body = await readBody(req);
       const wallet = normalizeWallet(body.wallet || "");
       const signature = body.signature || "";
@@ -215,7 +216,7 @@ const server = createServer(async (req, res) => {
       });
     }
 
-    if (req.method === "GET" && url.pathname === "/v1/auth/me") {
+    if (req.method === "GET" && pathname === "/v1/auth/me") {
       const session = getSession(req);
       if (!session) {
         return send(res, 401, { error: "invalid session" });
@@ -227,7 +228,7 @@ const server = createServer(async (req, res) => {
       });
     }
 
-    if (req.method === "POST" && url.pathname === "/v1/protocols/register") {
+    if (req.method === "POST" && pathname === "/v1/protocols/register") {
       const body = await readBody(req);
       const session = getSession(req);
       const isInternal = hasInternalAccess(req);
@@ -261,7 +262,7 @@ const server = createServer(async (req, res) => {
       return send(res, 201, { protocol, mode: "local" });
     }
 
-    if (req.method === "POST" && url.pathname === "/v1/protocols/update") {
+    if (req.method === "POST" && pathname === "/v1/protocols/update") {
       const body = await readBody(req);
       if (!body.protocolId) return send(res, 400, { error: "protocolId required" });
 
@@ -286,11 +287,11 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { protocol: updated });
     }
 
-    if (req.method === "GET" && url.pathname === "/v1/protocols") {
+    if (req.method === "GET" && pathname === "/v1/protocols") {
       return send(res, 200, { items: db.protocols });
     }
 
-    if (req.method === "POST" && url.pathname === "/v1/incidents") {
+    if (req.method === "POST" && pathname === "/v1/incidents") {
       const body = await readBody(req);
       if (!body.protocolId) return send(res, 400, { error: "protocolId required" });
 
@@ -310,7 +311,7 @@ const server = createServer(async (req, res) => {
       return send(res, 201, { incident, mode: "local" });
     }
 
-    if (req.method === "POST" && url.pathname === "/v1/incidents/decision") {
+    if (req.method === "POST" && pathname === "/v1/incidents/decision") {
       const body = await readBody(req);
       if (!body.incidentId || !body.decision) {
         return send(res, 400, { error: "incidentId and decision required" });
@@ -328,11 +329,11 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { ok: true, mode: "local" });
     }
 
-    if (req.method === "GET" && url.pathname === "/v1/incidents") {
+    if (req.method === "GET" && pathname === "/v1/incidents") {
       return send(res, 200, { items: db.incidents });
     }
 
-    if (req.method === "POST" && url.pathname === "/v1/pools/deposit") {
+    if (req.method === "POST" && pathname === "/v1/pools/deposit") {
       const body = await readBody(req);
       if (!body.protocolId || body.amount === undefined) {
         return send(res, 400, { error: "protocolId and amount required" });
@@ -346,7 +347,7 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { ok: true, mode: "local" });
     }
 
-    if (req.method === "POST" && url.pathname === "/v1/enforcement/execute") {
+    if (req.method === "POST" && pathname === "/v1/enforcement/execute") {
       const body = await readBody(req);
       if (!body.incidentId || !body.protocolId || body.totalAmount === undefined) {
         return send(res, 400, { error: "incidentId, protocolId, totalAmount required" });
@@ -364,7 +365,7 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { ok: true, mode: "local" });
     }
 
-    if (req.method === "POST" && url.pathname === "/v1/reputation/recompute") {
+    if (req.method === "POST" && pathname === "/v1/reputation/recompute") {
       const body = await readBody(req);
       if (!body.protocolId) return send(res, 400, { error: "protocolId required" });
 
@@ -390,7 +391,7 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { score: localScore, mode: "local" });
     }
 
-    if (req.method === "GET" && url.pathname === "/v1/reputation/protocols") {
+    if (req.method === "GET" && pathname === "/v1/reputation/protocols") {
       const items = db.protocols.map((p) => {
         const score = db.scores.find((s) => s.protocolId === p.id) || {
           score: 0,
