@@ -1,7 +1,9 @@
 import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
 import { createClient } from "genlayer-js";
 import { localnet, studionet } from "genlayer-js/chains";
-import { addIncident, db, ensureProtocol, upsertScore } from "./store.mjs";
+import { recoverMessageAddress } from "viem";
+import { addIncident, db, ensureProtocol, findProtocol, updateProtocol, upsertScore } from "./store.mjs";
 
 const PORT = Number(process.env.PORT || 8080);
 const SERVICE_NAME = process.env.SERVICE_NAME || "certlayer-api";
@@ -13,6 +15,11 @@ const GENLAYER_CONTRACT_ADDRESS = process.env.GENLAYER_CONTRACT_ADDRESS || "";
 const GENLAYER_SERVER_ACCOUNT = process.env.GENLAYER_SERVER_ACCOUNT || "";
 
 const LIVE_MODE = Boolean(GENLAYER_CONTRACT_ADDRESS);
+const NONCE_TTL_MS = 10 * 60 * 1000;
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+
+const walletNonces = new Map();
+const sessions = new Map();
 
 function send(res, status, data) {
   res.writeHead(status, {
@@ -34,6 +41,59 @@ async function readBody(req) {
 function checkAuth(req) {
   if (!API_KEY) return true;
   return req.headers["x-api-key"] === API_KEY;
+}
+
+function isValidWallet(wallet) {
+  return typeof wallet === "string" && /^0x[a-fA-F0-9]{40}$/.test(wallet);
+}
+
+function normalizeWallet(wallet) {
+  return wallet.toLowerCase();
+}
+
+function extractSessionToken(req) {
+  const authHeader = req.headers.authorization || "";
+  if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    return authHeader.slice(7).trim();
+  }
+  const headerToken = req.headers["x-session-token"];
+  return typeof headerToken === "string" ? headerToken.trim() : "";
+}
+
+function getSession(req) {
+  const token = extractSessionToken(req);
+  if (!token) return null;
+  const session = sessions.get(token);
+  if (!session) return null;
+  if (session.expiresAt <= Date.now()) {
+    sessions.delete(token);
+    return null;
+  }
+  return { token, ...session };
+}
+
+function createNonceMessage(wallet, nonce) {
+  return [
+    "CertLayer Authentication",
+    `Wallet: ${wallet}`,
+    `Nonce: ${nonce}`,
+    `Issued At: ${new Date().toISOString()}`,
+    "Sign this message to authenticate. No blockchain transaction will be sent.",
+  ].join("\n");
+}
+
+function isPublicPostRoute(pathname) {
+  return pathname === "/v1/auth/wallet/nonce" || pathname === "/v1/auth/wallet/verify";
+}
+
+function hasInternalAccess(req) {
+  return checkAuth(req);
+}
+
+function canAccessWrite(req, pathname) {
+  if (isPublicPostRoute(pathname)) return true;
+  if (hasInternalAccess(req)) return true;
+  return Boolean(getSession(req));
 }
 
 function buildClient(forWrite = false) {
@@ -76,7 +136,7 @@ const server = createServer(async (req, res) => {
 
     if (req.method === "OPTIONS") return send(res, 204, {});
 
-    if (req.method !== "GET" && !checkAuth(req)) {
+    if (req.method !== "GET" && !canAccessWrite(req, url.pathname)) {
       return send(res, 401, { error: "unauthorized" });
     }
 
@@ -95,8 +155,94 @@ const server = createServer(async (req, res) => {
       });
     }
 
+    if (req.method === "POST" && url.pathname === "/v1/auth/wallet/nonce") {
+      const body = await readBody(req);
+      const wallet = normalizeWallet(body.wallet || "");
+      if (!isValidWallet(wallet)) {
+        return send(res, 400, { error: "valid wallet is required" });
+      }
+
+      const nonce = randomBytes(16).toString("hex");
+      const message = createNonceMessage(wallet, nonce);
+      const expiresAt = Date.now() + NONCE_TTL_MS;
+      walletNonces.set(wallet, { nonce, message, expiresAt });
+
+      return send(res, 200, {
+        wallet,
+        message,
+        expiresAt: new Date(expiresAt).toISOString(),
+      });
+    }
+
+    if (req.method === "POST" && url.pathname === "/v1/auth/wallet/verify") {
+      const body = await readBody(req);
+      const wallet = normalizeWallet(body.wallet || "");
+      const signature = body.signature || "";
+
+      if (!isValidWallet(wallet)) {
+        return send(res, 400, { error: "valid wallet is required" });
+      }
+      if (typeof signature !== "string" || !signature.startsWith("0x")) {
+        return send(res, 400, { error: "valid signature is required" });
+      }
+
+      const stored = walletNonces.get(wallet);
+      if (!stored || stored.expiresAt <= Date.now()) {
+        walletNonces.delete(wallet);
+        return send(res, 401, { error: "nonce expired or missing" });
+      }
+
+      const recovered = await recoverMessageAddress({
+        message: stored.message,
+        signature,
+      });
+      if (normalizeWallet(recovered) !== wallet) {
+        return send(res, 401, { error: "signature verification failed" });
+      }
+
+      walletNonces.delete(wallet);
+      const token = randomBytes(32).toString("hex");
+      const expiresAt = Date.now() + SESSION_TTL_MS;
+      const role = "owner";
+      sessions.set(token, { wallet, role, expiresAt });
+
+      return send(res, 200, {
+        token,
+        tokenType: "Bearer",
+        wallet,
+        role,
+        expiresAt: new Date(expiresAt).toISOString(),
+      });
+    }
+
+    if (req.method === "GET" && url.pathname === "/v1/auth/me") {
+      const session = getSession(req);
+      if (!session) {
+        return send(res, 401, { error: "invalid session" });
+      }
+      return send(res, 200, {
+        wallet: session.wallet,
+        role: session.role,
+        expiresAt: new Date(session.expiresAt).toISOString(),
+      });
+    }
+
     if (req.method === "POST" && url.pathname === "/v1/protocols/register") {
       const body = await readBody(req);
+      const session = getSession(req);
+      const isInternal = hasInternalAccess(req);
+      if (!isInternal && !session) {
+        return send(res, 401, { error: "session required" });
+      }
+
+      if (!body.ownerWallet && session) {
+        body.ownerWallet = session.wallet;
+      }
+
+      if (!isValidWallet(body.ownerWallet || "")) {
+        return send(res, 400, { error: "ownerWallet required" });
+      }
+
       const protocol = ensureProtocol(body);
       upsertScore(protocol.id, 70, "B");
 
@@ -113,6 +259,31 @@ const server = createServer(async (req, res) => {
       }
 
       return send(res, 201, { protocol, mode: "local" });
+    }
+
+    if (req.method === "POST" && url.pathname === "/v1/protocols/update") {
+      const body = await readBody(req);
+      if (!body.protocolId) return send(res, 400, { error: "protocolId required" });
+
+      const protocol = findProtocol(body.protocolId);
+      if (!protocol) return send(res, 404, { error: "protocol not found" });
+
+      const session = getSession(req);
+      const isInternal = hasInternalAccess(req);
+      if (!isInternal) {
+        if (!session) return send(res, 401, { error: "session required" });
+        if (normalizeWallet(protocol.ownerWallet) !== normalizeWallet(session.wallet)) {
+          return send(res, 403, { error: "forbidden: owner wallet required" });
+        }
+      }
+
+      const updated = updateProtocol(body.protocolId, {
+        name: body.name,
+        website: body.website,
+        protocolType: body.protocolType,
+        uptimeBps: body.uptimeBps,
+      });
+      return send(res, 200, { protocol: updated });
     }
 
     if (req.method === "GET" && url.pathname === "/v1/protocols") {

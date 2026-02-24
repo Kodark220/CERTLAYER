@@ -5,15 +5,34 @@ export const db = {
 };
 
 export function ensureProtocol(payload) {
+  const ownerWallet = (payload.ownerWallet || "").toLowerCase();
   const protocol = {
     id: payload.id || `proto-${Date.now()}`,
     name: payload.name || "Unnamed Protocol",
     website: payload.website || "",
     protocolType: payload.protocolType || "other",
     uptimeBps: Number(payload.uptimeBps || 9990),
+    ownerWallet,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
   db.protocols.push(protocol);
+  return protocol;
+}
+
+export function findProtocol(protocolId) {
+  return db.protocols.find((p) => p.id === protocolId) || null;
+}
+
+export function updateProtocol(protocolId, patch) {
+  const protocol = findProtocol(protocolId);
+  if (!protocol) return null;
+
+  if (patch.name !== undefined) protocol.name = patch.name;
+  if (patch.website !== undefined) protocol.website = patch.website;
+  if (patch.protocolType !== undefined) protocol.protocolType = patch.protocolType;
+  if (patch.uptimeBps !== undefined) protocol.uptimeBps = Number(patch.uptimeBps);
+  protocol.updatedAt = new Date().toISOString();
   return protocol;
 }
 
