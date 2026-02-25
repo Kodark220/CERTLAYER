@@ -1,19 +1,73 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-
-type Mode = "wallet" | "email";
-type View = "landing" | "protocol" | "api";
+import { useEffect, useMemo, useState } from "react";
+import { CommitmentsSection } from "../src/components/dashboard/CommitmentsSection";
+import { IncidentLifecycleSection } from "../src/components/dashboard/IncidentLifecycleSection";
+import { ProtocolRegistrationSection } from "../src/components/dashboard/ProtocolRegistrationSection";
+import { SecurityRecoverySection } from "../src/components/dashboard/SecurityRecoverySection";
+import {
+  AuthSession,
+  CommitmentForm,
+  LifecycleForm,
+  Mode,
+  RegisterForm,
+  SecurityForm,
+  View,
+} from "../src/types/dashboard";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 const PUBLIC_API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
-type AuthSession = {
-  token: string;
-  wallet: string;
-  role: string;
-  expiresAt: string;
+const initialRegisterForm: RegisterForm = {
+  id: "",
+  name: "",
+  website: "",
+  protocolType: "rpc",
+  uptimeBps: "9990",
+};
+
+const initialLifecycleForm: LifecycleForm = {
+  incidentId: "",
+  startTs: "",
+  evidenceHash: "",
+  walletsCsv: "",
+  amountsCsv: "",
+  challengeEndsTs: "",
+  disputeWallet: "",
+  disputeEvidenceHash: "",
+  disputeDecision: "approved",
+  payoutStartIndex: "0",
+  payoutLimit: "20",
+};
+
+const initialCommitmentForm: CommitmentForm = {
+  commitmentId: "",
+  commitmentType: "governance",
+  sourceUrl: "",
+  commitmentTextHash: "",
+  deadlineTs: "",
+  verificationRule: "",
+  result: "fulfilled",
+  evidenceHash: "",
+};
+
+const initialSecurityForm: SecurityForm = {
+  incidentId: "",
+  startTs: "",
+  evidenceHash: "",
+  lastCleanBlock: "",
+  triggerSourcesCsv: "",
+  walletsCsv: "",
+  lossesCsv: "",
+  recoveryAmount: "",
+  recoveryStartIndex: "0",
+  recoveryLimit: "20",
+  responseSpeed: "0",
+  communicationQuality: "0",
+  poolAdequacy: "0",
+  postMortemQuality: "0",
+  recoveryEffort: "0",
 };
 
 export default function HomePage() {
@@ -22,73 +76,31 @@ export default function HomePage() {
   const [loadingAuth, setLoadingAuth] = useState(false);
   const [authError, setAuthError] = useState("");
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [registerForm, setRegisterForm] = useState({
-    id: "",
-    name: "",
-    website: "",
-    protocolType: "rpc",
-    uptimeBps: "9990",
-  });
+
+  const [registerForm, setRegisterForm] = useState<RegisterForm>(initialRegisterForm);
   const [registerLoading, setRegisterLoading] = useState(false);
   const [registerError, setRegisterError] = useState("");
   const [registerSuccess, setRegisterSuccess] = useState("");
   const [registerTxHash, setRegisterTxHash] = useState("");
   const [activeProtocolId, setActiveProtocolId] = useState("");
-  const [lifecycleForm, setLifecycleForm] = useState({
-    incidentId: "",
-    startTs: "",
-    evidenceHash: "",
-    walletsCsv: "",
-    amountsCsv: "",
-    challengeEndsTs: "",
-    disputeWallet: "",
-    disputeEvidenceHash: "",
-    disputeDecision: "approved",
-    payoutStartIndex: "0",
-    payoutLimit: "20",
-  });
+
+  const [lifecycleForm, setLifecycleForm] = useState<LifecycleForm>(initialLifecycleForm);
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
   const [lifecycleError, setLifecycleError] = useState("");
   const [lifecycleLog, setLifecycleLog] = useState<string[]>([]);
-  const canSeeInternalControls = session?.role === "admin";
-  const [commitmentForm, setCommitmentForm] = useState({
-    commitmentId: "",
-    commitmentType: "governance",
-    sourceUrl: "",
-    commitmentTextHash: "",
-    deadlineTs: "",
-    verificationRule: "",
-    result: "fulfilled",
-    evidenceHash: "",
-  });
+
+  const [commitmentForm, setCommitmentForm] = useState<CommitmentForm>(initialCommitmentForm);
   const [commitmentLoading, setCommitmentLoading] = useState(false);
   const [commitmentError, setCommitmentError] = useState("");
   const [commitmentLog, setCommitmentLog] = useState<string[]>([]);
-  const [securityForm, setSecurityForm] = useState({
-    incidentId: "",
-    startTs: "",
-    evidenceHash: "",
-    lastCleanBlock: "",
-    triggerSourcesCsv: "",
-    walletsCsv: "",
-    lossesCsv: "",
-    recoveryAmount: "",
-    recoveryStartIndex: "0",
-    recoveryLimit: "20",
-    responseSpeed: "0",
-    communicationQuality: "0",
-    poolAdequacy: "0",
-    postMortemQuality: "0",
-    recoveryEffort: "0",
-  });
+
+  const [securityForm, setSecurityForm] = useState<SecurityForm>(initialSecurityForm);
   const [securityLoading, setSecurityLoading] = useState(false);
   const [securityError, setSecurityError] = useState("");
   const [securityLog, setSecurityLog] = useState<string[]>([]);
 
-  const headline = useMemo(
-    () => "You verify. You trigger. You enforce.",
-    []
-  );
+  const headline = useMemo(() => "You verify. You trigger. You enforce.", []);
+  const canSeeInternalControls = session?.role === "admin";
 
   useEffect(() => {
     const saved = localStorage.getItem("certlayer_session_token");
@@ -112,36 +124,41 @@ export default function HomePage() {
       });
   }, []);
 
+  function setRegisterField(field: keyof RegisterForm, value: string) {
+    setRegisterForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function setLifecycleField(field: keyof LifecycleForm, value: string) {
+    setLifecycleForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function setCommitmentField(field: keyof CommitmentForm, value: string) {
+    setCommitmentForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function setSecurityField(field: keyof SecurityForm, value: string) {
+    setSecurityForm((prev) => ({ ...prev, [field]: value }));
+  }
+
   async function postJson(path: string, body: Record<string, unknown>, token?: string) {
     const headers: Record<string, string> = {
       "content-type": "application/json",
     };
     if (token) headers.Authorization = `Bearer ${token}`;
     if (PUBLIC_API_KEY) headers["x-api-key"] = PUBLIC_API_KEY;
-
-    return fetch(`${API_BASE_URL}${path}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-    });
+    return fetch(`${API_BASE_URL}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
   }
 
   async function signInWithMetaMask() {
     setAuthError("");
     setLoadingAuth(true);
     try {
-      const ethereum = (window as any).ethereum;
-      if (!ethereum) {
-        throw new Error("MetaMask is not installed");
-      }
+      const ethereum = (window as { ethereum?: { request: (arg: unknown) => Promise<unknown> } }).ethereum;
+      if (!ethereum) throw new Error("MetaMask is not installed");
 
-      const accounts: string[] = await ethereum.request({
-        method: "eth_requestAccounts",
-      });
+      const accounts = (await ethereum.request({ method: "eth_requestAccounts" })) as string[];
       const wallet = accounts[0];
-      if (!wallet) {
-        throw new Error("No wallet selected");
-      }
+      if (!wallet) throw new Error("No wallet selected");
 
       const nonceRes = await postJson("/v1/auth/wallet/nonce", { wallet });
       if (!nonceRes.ok) {
@@ -150,16 +167,17 @@ export default function HomePage() {
       }
       const nonceData = await nonceRes.json();
 
-      const signature = await ethereum.request({
+      const signature = (await ethereum.request({
         method: "personal_sign",
         params: [nonceData.message, wallet],
-      });
+      })) as string;
 
       const verifyRes = await postJson("/v1/auth/wallet/verify", { wallet, signature });
       if (!verifyRes.ok) {
         const e = await verifyRes.json();
         throw new Error(e.error || "Wallet verification failed");
       }
+
       const verifyData = await verifyRes.json();
       localStorage.setItem("certlayer_session_token", verifyData.token);
       setSession({
@@ -170,8 +188,7 @@ export default function HomePage() {
       });
       setView("protocol");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Authentication failed";
-      setAuthError(message);
+      setAuthError(error instanceof Error ? error.message : "Authentication failed");
     } finally {
       setLoadingAuth(false);
     }
@@ -213,16 +230,13 @@ export default function HomePage() {
         session.token
       );
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Registration failed");
-      }
+      if (!res.ok) throw new Error(data.error || "Registration failed");
       setRegisterSuccess(`Protocol registered: ${data.protocol.id}`);
       setActiveProtocolId(data.protocol.id);
       setRegisterTxHash(data.onchain?.txHash || "");
       setRegisterForm((prev) => ({ ...prev, id: "" }));
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Registration failed";
-      setRegisterError(message);
+      setRegisterError(error instanceof Error ? error.message : "Registration failed");
     } finally {
       setRegisterLoading(false);
     }
@@ -238,22 +252,19 @@ export default function HomePage() {
       setLifecycleError("Set or register a Protocol ID first.");
       return;
     }
-
     setLifecycleError("");
     setLifecycleLoading(true);
     try {
-      const body = { ...payload, protocolId };
-      const res = await postJson(path, body, session.token);
+      const res = await postJson(path, { ...payload, protocolId }, session.token);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `${label} failed`);
       const tx = data.onchain?.txHash ? ` tx=${data.onchain.txHash}` : "";
       setLifecycleLog((prev) => [`${label} success${tx}`, ...prev].slice(0, 20));
       if (path === "/v1/incidents/create-lifecycle" && data.incidentId) {
-        setLifecycleForm((p) => ({ ...p, incidentId: data.incidentId }));
+        setLifecycleField("incidentId", data.incidentId);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : `${label} failed`;
-      setLifecycleError(message);
+      setLifecycleError(error instanceof Error ? error.message : `${label} failed`);
     } finally {
       setLifecycleLoading(false);
     }
@@ -278,8 +289,7 @@ export default function HomePage() {
       const tx = data.onchain?.txHash ? ` tx=${data.onchain.txHash}` : "";
       setCommitmentLog((prev) => [`${label} success${tx}`, ...prev].slice(0, 20));
     } catch (error) {
-      const msg = error instanceof Error ? error.message : `${label} failed`;
-      setCommitmentError(msg);
+      setCommitmentError(error instanceof Error ? error.message : `${label} failed`);
     } finally {
       setCommitmentLoading(false);
     }
@@ -304,11 +314,10 @@ export default function HomePage() {
       const tx = data.onchain?.txHash ? ` tx=${data.onchain.txHash}` : "";
       setSecurityLog((prev) => [`${label} success${tx}`, ...prev].slice(0, 20));
       if (path === "/v1/security-incidents/create" && data.incidentId) {
-        setSecurityForm((p) => ({ ...p, incidentId: data.incidentId }));
+        setSecurityField("incidentId", data.incidentId);
       }
     } catch (error) {
-      const msg = error instanceof Error ? error.message : `${label} failed`;
-      setSecurityError(msg);
+      setSecurityError(error instanceof Error ? error.message : `${label} failed`);
     } finally {
       setSecurityLoading(false);
     }
@@ -326,671 +335,231 @@ export default function HomePage() {
             </p>
           ) : null}
         </section>
+
         <section className="grid grid-2">
           <div className="kpi">Reputation Score<strong>78.4 (A)</strong></div>
           <div className="kpi">Coverage Pool<strong>245,000 USDC</strong></div>
           <div className="kpi">30d Uptime<strong>99.82%</strong></div>
           <div className="kpi">Compensation Paid<strong>12,430 USDC</strong></div>
         </section>
+
         <section className="card">
           <h3>Next modules</h3>
           <p>Incidents, Coverage Pool, Reputation Breakdown, API Access, Team Roles.</p>
         </section>
-        <section className="card">
-          <h3>Register Protocol</h3>
-          <p>Owner wallet is taken from your signed session.</p>
-          <div className="grid">
-            <div>
-              <label className="label">Protocol ID (optional)</label>
-              <input
-                value={registerForm.id}
-                onChange={(e) => setRegisterForm((p) => ({ ...p, id: e.target.value }))}
-                placeholder="proto-my-service"
-              />
-            </div>
-            <div>
-              <label className="label">Protocol Name</label>
-              <input
-                value={registerForm.name}
-                onChange={(e) => setRegisterForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="My Protocol"
-              />
-            </div>
-            <div>
-              <label className="label">Website</label>
-              <input
-                value={registerForm.website}
-                onChange={(e) => setRegisterForm((p) => ({ ...p, website: e.target.value }))}
-                placeholder="https://example.com"
-              />
-            </div>
-            <div>
-              <label className="label">Protocol Type</label>
-              <select
-                value={registerForm.protocolType}
-                onChange={(e) => setRegisterForm((p) => ({ ...p, protocolType: e.target.value }))}
-              >
-                <option value="rpc">RPC</option>
-                <option value="bridge">Bridge</option>
-                <option value="defi">DeFi</option>
-                <option value="oracle">Oracle</option>
-                <option value="l2">L2</option>
-                <option value="infra">Infrastructure</option>
-              </select>
-            </div>
-            <div>
-              <label className="label">Uptime Target (bps)</label>
-              <input
-                value={registerForm.uptimeBps}
-                onChange={(e) => setRegisterForm((p) => ({ ...p, uptimeBps: e.target.value }))}
-                placeholder="9990"
-              />
-            </div>
-            <button onClick={submitProtocolRegistration} disabled={registerLoading}>
-              {registerLoading ? "Submitting..." : "Register Protocol On-Chain"}
-            </button>
-            {registerSuccess ? <p style={{ color: "#a8f0bf", fontSize: 13 }}>{registerSuccess}</p> : null}
-            {registerTxHash ? (
-              <p style={{ fontSize: 12, color: "#9eb4cc", wordBreak: "break-all" }}>
-                Tx Hash: {registerTxHash}
-              </p>
-            ) : null}
-            {canSeeInternalControls ? (
-              <div>
-                <label className="label">Active Protocol ID (for lifecycle actions)</label>
-                <input
-                  value={activeProtocolId}
-                  onChange={(e) => setActiveProtocolId(e.target.value)}
-                  placeholder="proto-my-service"
-                />
-              </div>
-            ) : null}
-            {registerError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{registerError}</p> : null}
-          </div>
-        </section>
+
+        <ProtocolRegistrationSection
+          form={registerForm}
+          onFieldChange={setRegisterField}
+          onSubmit={submitProtocolRegistration}
+          loading={registerLoading}
+          success={registerSuccess}
+          txHash={registerTxHash}
+          error={registerError}
+          canSeeInternalControls={canSeeInternalControls}
+          activeProtocolId={activeProtocolId}
+          onActiveProtocolIdChange={setActiveProtocolId}
+        />
+
         {canSeeInternalControls ? (
-          <section className="card">
-            <h3>Incident Lifecycle</h3>
-            <p>Create incident, attach affected users, challenge/dispute, finalize, payout batch.</p>
-            <div className="grid">
-            <div>
-              <label className="label">Incident ID</label>
-              <input
-                value={lifecycleForm.incidentId}
-                onChange={(e) => setLifecycleForm((p) => ({ ...p, incidentId: e.target.value }))}
-                placeholder="inc-001"
-              />
-            </div>
-            <div>
-              <label className="label">Start TS (unix, optional)</label>
-              <input
-                value={lifecycleForm.startTs}
-                onChange={(e) => setLifecycleForm((p) => ({ ...p, startTs: e.target.value }))}
-                placeholder="1700000000"
-              />
-            </div>
-            <div>
-              <label className="label">Evidence Hash</label>
-              <input
-                value={lifecycleForm.evidenceHash}
-                onChange={(e) => setLifecycleForm((p) => ({ ...p, evidenceHash: e.target.value }))}
-                placeholder="ipfs://... or hash"
-              />
-            </div>
-            <button
-              disabled={lifecycleLoading}
-              onClick={() =>
-                runLifecycleAction(
-                  "/v1/incidents/create-lifecycle",
-                  {
-                    incidentId: lifecycleForm.incidentId || undefined,
-                    startTs: lifecycleForm.startTs ? Number(lifecycleForm.startTs) : undefined,
-                    evidenceHash: lifecycleForm.evidenceHash,
-                  },
-                  "Create incident"
-                )
-              }
-            >
-              {lifecycleLoading ? "Running..." : "1) Create Incident"}
-            </button>
-
-            <div>
-              <label className="label">Wallets CSV</label>
-              <input
-                value={lifecycleForm.walletsCsv}
-                onChange={(e) => setLifecycleForm((p) => ({ ...p, walletsCsv: e.target.value }))}
-                placeholder="0xabc...,0xdef..."
-              />
-            </div>
-            <div>
-              <label className="label">Amounts CSV</label>
-              <input
-                value={lifecycleForm.amountsCsv}
-                onChange={(e) => setLifecycleForm((p) => ({ ...p, amountsCsv: e.target.value }))}
-                placeholder="100,250"
-              />
-            </div>
-            <button
-              disabled={lifecycleLoading}
-              onClick={() =>
-                runLifecycleAction(
-                  "/v1/incidents/affected-users",
-                  {
-                    incidentId: lifecycleForm.incidentId,
-                    walletsCsv: lifecycleForm.walletsCsv,
-                    amountsCsv: lifecycleForm.amountsCsv,
-                  },
-                  "Attach affected users"
-                )
-              }
-            >
-              {lifecycleLoading ? "Running..." : "2) Attach Affected Users"}
-            </button>
-
-            <div>
-              <label className="label">Challenge Ends TS (unix)</label>
-              <input
-                value={lifecycleForm.challengeEndsTs}
-                onChange={(e) => setLifecycleForm((p) => ({ ...p, challengeEndsTs: e.target.value }))}
-                placeholder="1700003600"
-              />
-            </div>
-            <button
-              disabled={lifecycleLoading}
-              onClick={() =>
-                runLifecycleAction(
-                  "/v1/incidents/challenge/open",
-                  {
-                    incidentId: lifecycleForm.incidentId,
-                    challengeEndsTs: Number(lifecycleForm.challengeEndsTs),
-                  },
-                  "Open challenge window"
-                )
-              }
-            >
-              {lifecycleLoading ? "Running..." : "3) Open Challenge Window"}
-            </button>
-
-            <div>
-              <label className="label">Dispute Wallet</label>
-              <input
-                value={lifecycleForm.disputeWallet}
-                onChange={(e) => setLifecycleForm((p) => ({ ...p, disputeWallet: e.target.value }))}
-                placeholder="0x..."
-              />
-            </div>
-            <div>
-              <label className="label">Dispute Evidence Hash</label>
-              <input
-                value={lifecycleForm.disputeEvidenceHash}
-                onChange={(e) => setLifecycleForm((p) => ({ ...p, disputeEvidenceHash: e.target.value }))}
-                placeholder="hash"
-              />
-            </div>
-            <button
-              disabled={lifecycleLoading}
-              onClick={() =>
-                runLifecycleAction(
-                  "/v1/incidents/dispute",
-                  {
-                    incidentId: lifecycleForm.incidentId,
-                    wallet: lifecycleForm.disputeWallet,
-                    evidenceHash: lifecycleForm.disputeEvidenceHash,
-                  },
-                  "Raise dispute"
-                )
-              }
-            >
-              {lifecycleLoading ? "Running..." : "4) Raise Dispute (optional)"}
-            </button>
-
-            <div>
-              <label className="label">Dispute Decision</label>
-              <select
-                value={lifecycleForm.disputeDecision}
-                onChange={(e) => setLifecycleForm((p) => ({ ...p, disputeDecision: e.target.value }))}
-              >
-                <option value="approved">approved</option>
-                <option value="rejected">rejected</option>
-              </select>
-            </div>
-            <button
-              disabled={lifecycleLoading}
-              onClick={() =>
-                runLifecycleAction(
-                  "/v1/incidents/dispute/resolve",
-                  {
-                    incidentId: lifecycleForm.incidentId,
-                    wallet: lifecycleForm.disputeWallet,
-                    decision: lifecycleForm.disputeDecision,
-                  },
-                  "Resolve dispute"
-                )
-              }
-            >
-              {lifecycleLoading ? "Running..." : "5) Resolve Dispute (optional)"}
-            </button>
-
-            <button
-              disabled={lifecycleLoading}
-              onClick={() =>
-                runLifecycleAction(
-                  "/v1/incidents/finalize",
-                  { incidentId: lifecycleForm.incidentId },
-                  "Finalize incident"
-                )
-              }
-            >
-              {lifecycleLoading ? "Running..." : "6) Finalize Incident"}
-            </button>
-
-            <div>
-              <label className="label">Payout Start Index</label>
-              <input
-                value={lifecycleForm.payoutStartIndex}
-                onChange={(e) => setLifecycleForm((p) => ({ ...p, payoutStartIndex: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="label">Payout Limit</label>
-              <input
-                value={lifecycleForm.payoutLimit}
-                onChange={(e) => setLifecycleForm((p) => ({ ...p, payoutLimit: e.target.value }))}
-              />
-            </div>
-            <button
-              disabled={lifecycleLoading}
-              onClick={() =>
-                runLifecycleAction(
-                  "/v1/incidents/payout-batch",
-                  {
-                    incidentId: lifecycleForm.incidentId,
-                    startIndex: Number(lifecycleForm.payoutStartIndex || 0),
-                    limit: Number(lifecycleForm.payoutLimit || 20),
-                  },
-                  "Execute payout batch"
-                )
-              }
-            >
-              {lifecycleLoading ? "Running..." : "7) Execute Payout Batch"}
-            </button>
-
-            {lifecycleError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{lifecycleError}</p> : null}
-              {lifecycleLog.length > 0 ? (
-                <div>
-                  <label className="label">Lifecycle Log</label>
-                  <div className="grid">
-                    {lifecycleLog.map((line, idx) => (
-                      <div key={`${line}-${idx}`} className="kpi" style={{ fontSize: 12 }}>
-                        {line}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </section>
+          <IncidentLifecycleSection
+            form={lifecycleForm}
+            onFieldChange={setLifecycleField}
+            loading={lifecycleLoading}
+            error={lifecycleError}
+            log={lifecycleLog}
+            onCreateIncident={() =>
+              runLifecycleAction(
+                "/v1/incidents/create-lifecycle",
+                {
+                  incidentId: lifecycleForm.incidentId || undefined,
+                  startTs: lifecycleForm.startTs ? Number(lifecycleForm.startTs) : undefined,
+                  evidenceHash: lifecycleForm.evidenceHash,
+                },
+                "Create incident"
+              )
+            }
+            onAttachAffectedUsers={() =>
+              runLifecycleAction(
+                "/v1/incidents/affected-users",
+                {
+                  incidentId: lifecycleForm.incidentId,
+                  walletsCsv: lifecycleForm.walletsCsv,
+                  amountsCsv: lifecycleForm.amountsCsv,
+                },
+                "Attach affected users"
+              )
+            }
+            onOpenChallenge={() =>
+              runLifecycleAction(
+                "/v1/incidents/challenge/open",
+                {
+                  incidentId: lifecycleForm.incidentId,
+                  challengeEndsTs: Number(lifecycleForm.challengeEndsTs),
+                },
+                "Open challenge window"
+              )
+            }
+            onRaiseDispute={() =>
+              runLifecycleAction(
+                "/v1/incidents/dispute",
+                {
+                  incidentId: lifecycleForm.incidentId,
+                  wallet: lifecycleForm.disputeWallet,
+                  evidenceHash: lifecycleForm.disputeEvidenceHash,
+                },
+                "Raise dispute"
+              )
+            }
+            onResolveDispute={() =>
+              runLifecycleAction(
+                "/v1/incidents/dispute/resolve",
+                {
+                  incidentId: lifecycleForm.incidentId,
+                  wallet: lifecycleForm.disputeWallet,
+                  decision: lifecycleForm.disputeDecision,
+                },
+                "Resolve dispute"
+              )
+            }
+            onFinalizeIncident={() =>
+              runLifecycleAction("/v1/incidents/finalize", { incidentId: lifecycleForm.incidentId }, "Finalize incident")
+            }
+            onExecutePayoutBatch={() =>
+              runLifecycleAction(
+                "/v1/incidents/payout-batch",
+                {
+                  incidentId: lifecycleForm.incidentId,
+                  startIndex: Number(lifecycleForm.payoutStartIndex || 0),
+                  limit: Number(lifecycleForm.payoutLimit || 20),
+                },
+                "Execute payout batch"
+              )
+            }
+          />
         ) : null}
+
         {canSeeInternalControls ? (
-          <section className="card">
-            <h3>Commitments (Admin)</h3>
-            <div className="grid">
-              <div>
-                <label className="label">Commitment ID</label>
-                <input
-                  value={commitmentForm.commitmentId}
-                  onChange={(e) => setCommitmentForm((p) => ({ ...p, commitmentId: e.target.value }))}
-                  placeholder="commit-001"
-                />
-              </div>
-              <div>
-                <label className="label">Type</label>
-                <select
-                  value={commitmentForm.commitmentType}
-                  onChange={(e) => setCommitmentForm((p) => ({ ...p, commitmentType: e.target.value }))}
-                >
-                  <option value="governance">governance</option>
-                  <option value="roadmap">roadmap</option>
-                  <option value="financial">financial</option>
-                  <option value="security">security</option>
-                  <option value="communication">communication</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Source URL</label>
-                <input
-                  value={commitmentForm.sourceUrl}
-                  onChange={(e) => setCommitmentForm((p) => ({ ...p, sourceUrl: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Commitment Text Hash</label>
-                <input
-                  value={commitmentForm.commitmentTextHash}
-                  onChange={(e) => setCommitmentForm((p) => ({ ...p, commitmentTextHash: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Deadline TS (unix)</label>
-                <input
-                  value={commitmentForm.deadlineTs}
-                  onChange={(e) => setCommitmentForm((p) => ({ ...p, deadlineTs: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Verification Rule</label>
-                <input
-                  value={commitmentForm.verificationRule}
-                  onChange={(e) => setCommitmentForm((p) => ({ ...p, verificationRule: e.target.value }))}
-                />
-              </div>
-              <button
-                disabled={commitmentLoading}
-                onClick={() =>
-                  runCommitmentAction(
-                    "/v1/commitments/register",
-                    {
-                      commitmentId: commitmentForm.commitmentId,
-                      commitmentType: commitmentForm.commitmentType,
-                      sourceUrl: commitmentForm.sourceUrl,
-                      commitmentTextHash: commitmentForm.commitmentTextHash,
-                      deadlineTs: Number(commitmentForm.deadlineTs),
-                      verificationRule: commitmentForm.verificationRule,
-                    },
-                    "Register commitment"
-                  )
-                }
-              >
-                {commitmentLoading ? "Running..." : "Register Commitment"}
-              </button>
-              <div>
-                <label className="label">Evaluate Result</label>
-                <select
-                  value={commitmentForm.result}
-                  onChange={(e) => setCommitmentForm((p) => ({ ...p, result: e.target.value }))}
-                >
-                  <option value="fulfilled">fulfilled</option>
-                  <option value="partial">partial</option>
-                  <option value="missed">missed</option>
-                </select>
-              </div>
-              <div>
-                <label className="label">Evidence Hash</label>
-                <input
-                  value={commitmentForm.evidenceHash}
-                  onChange={(e) => setCommitmentForm((p) => ({ ...p, evidenceHash: e.target.value }))}
-                />
-              </div>
-              <button
-                disabled={commitmentLoading}
-                onClick={() =>
-                  runCommitmentAction(
-                    "/v1/commitments/evaluate",
-                    {
-                      commitmentId: commitmentForm.commitmentId,
-                      result: commitmentForm.result,
-                      evidenceHash: commitmentForm.evidenceHash,
-                    },
-                    "Evaluate commitment"
-                  )
-                }
-              >
-                {commitmentLoading ? "Running..." : "Evaluate Commitment"}
-              </button>
-              <button
-                disabled={commitmentLoading}
-                onClick={() =>
-                  runCommitmentAction(
-                    "/v1/commitments/evidence",
-                    {
-                      commitmentId: commitmentForm.commitmentId,
-                      evidenceHash: commitmentForm.evidenceHash,
-                    },
-                    "Submit fulfillment evidence"
-                  )
-                }
-              >
-                {commitmentLoading ? "Running..." : "Submit Grace Evidence"}
-              </button>
-              <button
-                disabled={commitmentLoading}
-                onClick={() =>
-                  runCommitmentAction(
-                    "/v1/commitments/finalize",
-                    { commitmentId: commitmentForm.commitmentId },
-                    "Finalize commitment"
-                  )
-                }
-              >
-                {commitmentLoading ? "Running..." : "Finalize Commitment"}
-              </button>
-              {commitmentError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{commitmentError}</p> : null}
-              {commitmentLog.length > 0 ? (
-                <div>
-                  <label className="label">Commitment Log</label>
-                  <div className="grid">
-                    {commitmentLog.map((line, idx) => (
-                      <div key={`${line}-${idx}`} className="kpi" style={{ fontSize: 12 }}>
-                        {line}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </section>
+          <CommitmentsSection
+            form={commitmentForm}
+            onFieldChange={setCommitmentField}
+            loading={commitmentLoading}
+            error={commitmentError}
+            log={commitmentLog}
+            onRegister={() =>
+              runCommitmentAction(
+                "/v1/commitments/register",
+                {
+                  commitmentId: commitmentForm.commitmentId,
+                  commitmentType: commitmentForm.commitmentType,
+                  sourceUrl: commitmentForm.sourceUrl,
+                  commitmentTextHash: commitmentForm.commitmentTextHash,
+                  deadlineTs: Number(commitmentForm.deadlineTs),
+                  verificationRule: commitmentForm.verificationRule,
+                },
+                "Register commitment"
+              )
+            }
+            onEvaluate={() =>
+              runCommitmentAction(
+                "/v1/commitments/evaluate",
+                {
+                  commitmentId: commitmentForm.commitmentId,
+                  result: commitmentForm.result,
+                  evidenceHash: commitmentForm.evidenceHash,
+                },
+                "Evaluate commitment"
+              )
+            }
+            onSubmitEvidence={() =>
+              runCommitmentAction(
+                "/v1/commitments/evidence",
+                {
+                  commitmentId: commitmentForm.commitmentId,
+                  evidenceHash: commitmentForm.evidenceHash,
+                },
+                "Submit fulfillment evidence"
+              )
+            }
+            onFinalize={() =>
+              runCommitmentAction(
+                "/v1/commitments/finalize",
+                { commitmentId: commitmentForm.commitmentId },
+                "Finalize commitment"
+              )
+            }
+          />
         ) : null}
+
         {canSeeInternalControls ? (
-          <section className="card">
-            <h3>Security & Recovery (Admin)</h3>
-            <div className="grid">
-              <div>
-                <label className="label">Security Incident ID</label>
-                <input
-                  value={securityForm.incidentId}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, incidentId: e.target.value }))}
-                  placeholder="sec-001"
-                />
-              </div>
-              <div>
-                <label className="label">Start TS (unix)</label>
-                <input
-                  value={securityForm.startTs}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, startTs: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Evidence Hash</label>
-                <input
-                  value={securityForm.evidenceHash}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, evidenceHash: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Last Clean Block</label>
-                <input
-                  value={securityForm.lastCleanBlock}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, lastCleanBlock: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Trigger Sources CSV</label>
-                <input
-                  value={securityForm.triggerSourcesCsv}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, triggerSourcesCsv: e.target.value }))}
-                  placeholder="official,peckshield"
-                />
-              </div>
-              <button
-                disabled={securityLoading}
-                onClick={() =>
-                  runSecurityAction(
-                    "/v1/security-incidents/create",
-                    {
-                      incidentId: securityForm.incidentId || undefined,
-                      startTs: securityForm.startTs ? Number(securityForm.startTs) : undefined,
-                      evidenceHash: securityForm.evidenceHash,
-                      lastCleanBlock: Number(securityForm.lastCleanBlock || 0),
-                      triggerSourcesCsv: securityForm.triggerSourcesCsv,
-                    },
-                    "Create security incident"
-                  )
-                }
-              >
-                {securityLoading ? "Running..." : "Create Security Incident"}
-              </button>
-              <div>
-                <label className="label">Loss Wallets CSV</label>
-                <input
-                  value={securityForm.walletsCsv}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, walletsCsv: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Loss Amounts CSV</label>
-                <input
-                  value={securityForm.lossesCsv}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, lossesCsv: e.target.value }))}
-                />
-              </div>
-              <button
-                disabled={securityLoading}
-                onClick={() =>
-                  runSecurityAction(
-                    "/v1/security-incidents/loss-snapshot",
-                    {
-                      incidentId: securityForm.incidentId,
-                      walletsCsv: securityForm.walletsCsv,
-                      lossesCsv: securityForm.lossesCsv,
-                    },
-                    "Attach loss snapshot"
-                  )
-                }
-              >
-                {securityLoading ? "Running..." : "Attach Loss Snapshot"}
-              </button>
-              <div>
-                <label className="label">Recovery Amount</label>
-                <input
-                  value={securityForm.recoveryAmount}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, recoveryAmount: e.target.value }))}
-                />
-              </div>
-              <button
-                disabled={securityLoading}
-                onClick={() =>
-                  runSecurityAction(
-                    "/v1/security-incidents/recovery/record",
-                    {
-                      incidentId: securityForm.incidentId,
-                      amount: Number(securityForm.recoveryAmount || 0),
-                    },
-                    "Record recovery"
-                  )
-                }
-              >
-                {securityLoading ? "Running..." : "Record Recovery"}
-              </button>
-              <div>
-                <label className="label">Recovery Start Index</label>
-                <input
-                  value={securityForm.recoveryStartIndex}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, recoveryStartIndex: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Recovery Limit</label>
-                <input
-                  value={securityForm.recoveryLimit}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, recoveryLimit: e.target.value }))}
-                />
-              </div>
-              <button
-                disabled={securityLoading}
-                onClick={() =>
-                  runSecurityAction(
-                    "/v1/security-incidents/recovery/distribute",
-                    {
-                      incidentId: securityForm.incidentId,
-                      startIndex: Number(securityForm.recoveryStartIndex || 0),
-                      limit: Number(securityForm.recoveryLimit || 20),
-                    },
-                    "Distribute recovery batch"
-                  )
-                }
-              >
-                {securityLoading ? "Running..." : "Distribute Recovery Batch"}
-              </button>
-              <div>
-                <label className="label">Response Speed</label>
-                <input
-                  value={securityForm.responseSpeed}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, responseSpeed: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Communication Quality</label>
-                <input
-                  value={securityForm.communicationQuality}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, communicationQuality: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Pool Adequacy</label>
-                <input
-                  value={securityForm.poolAdequacy}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, poolAdequacy: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Post-Mortem Quality</label>
-                <input
-                  value={securityForm.postMortemQuality}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, postMortemQuality: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="label">Recovery Effort</label>
-                <input
-                  value={securityForm.recoveryEffort}
-                  onChange={(e) => setSecurityForm((p) => ({ ...p, recoveryEffort: e.target.value }))}
-                />
-              </div>
-              <button
-                disabled={securityLoading}
-                onClick={() =>
-                  runSecurityAction(
-                    "/v1/security-incidents/response-score",
-                    {
-                      incidentId: securityForm.incidentId,
-                      responseSpeed: Number(securityForm.responseSpeed || 0),
-                      communicationQuality: Number(securityForm.communicationQuality || 0),
-                      poolAdequacy: Number(securityForm.poolAdequacy || 0),
-                      postMortemQuality: Number(securityForm.postMortemQuality || 0),
-                      recoveryEffort: Number(securityForm.recoveryEffort || 0),
-                    },
-                    "Set hack response scores"
-                  )
-                }
-              >
-                {securityLoading ? "Running..." : "Set Hack Response Scores"}
-              </button>
-              {securityError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{securityError}</p> : null}
-              {securityLog.length > 0 ? (
-                <div>
-                  <label className="label">Security Log</label>
-                  <div className="grid">
-                    {securityLog.map((line, idx) => (
-                      <div key={`${line}-${idx}`} className="kpi" style={{ fontSize: 12 }}>
-                        {line}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </section>
+          <SecurityRecoverySection
+            form={securityForm}
+            onFieldChange={setSecurityField}
+            loading={securityLoading}
+            error={securityError}
+            log={securityLog}
+            onCreateSecurityIncident={() =>
+              runSecurityAction(
+                "/v1/security-incidents/create",
+                {
+                  incidentId: securityForm.incidentId || undefined,
+                  startTs: securityForm.startTs ? Number(securityForm.startTs) : undefined,
+                  evidenceHash: securityForm.evidenceHash,
+                  lastCleanBlock: Number(securityForm.lastCleanBlock || 0),
+                  triggerSourcesCsv: securityForm.triggerSourcesCsv,
+                },
+                "Create security incident"
+              )
+            }
+            onAttachLossSnapshot={() =>
+              runSecurityAction(
+                "/v1/security-incidents/loss-snapshot",
+                {
+                  incidentId: securityForm.incidentId,
+                  walletsCsv: securityForm.walletsCsv,
+                  lossesCsv: securityForm.lossesCsv,
+                },
+                "Attach loss snapshot"
+              )
+            }
+            onRecordRecovery={() =>
+              runSecurityAction(
+                "/v1/security-incidents/recovery/record",
+                {
+                  incidentId: securityForm.incidentId,
+                  amount: Number(securityForm.recoveryAmount || 0),
+                },
+                "Record recovery"
+              )
+            }
+            onDistributeRecoveryBatch={() =>
+              runSecurityAction(
+                "/v1/security-incidents/recovery/distribute",
+                {
+                  incidentId: securityForm.incidentId,
+                  startIndex: Number(securityForm.recoveryStartIndex || 0),
+                  limit: Number(securityForm.recoveryLimit || 20),
+                },
+                "Distribute recovery batch"
+              )
+            }
+            onSetHackScores={() =>
+              runSecurityAction(
+                "/v1/security-incidents/response-score",
+                {
+                  incidentId: securityForm.incidentId,
+                  responseSpeed: Number(securityForm.responseSpeed || 0),
+                  communicationQuality: Number(securityForm.communicationQuality || 0),
+                  poolAdequacy: Number(securityForm.poolAdequacy || 0),
+                  postMortemQuality: Number(securityForm.postMortemQuality || 0),
+                  recoveryEffort: Number(securityForm.recoveryEffort || 0),
+                },
+                "Set hack response scores"
+              )
+            }
+          />
         ) : null}
+
         <section className="card">
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => setView("landing")}>Back</button>
@@ -1027,8 +596,8 @@ export default function HomePage() {
           <h1>CertLayer</h1>
           <p>{headline}</p>
           <p>
-            Protocols pay you to hold them accountable. Users are compensated automatically when
-            SLA breaches are verified.
+            Protocols pay you to hold them accountable. Users are compensated automatically when SLA breaches are
+            verified.
           </p>
           <div className="grid" style={{ marginTop: 12 }}>
             <div className="kpi">Protocols monitored<strong>0</strong></div>
@@ -1045,11 +614,7 @@ export default function HomePage() {
         <article className="card">
           <h2>Sign In</h2>
           <p>Access protocol dashboard or API portal.</p>
-          {session ? (
-            <p style={{ fontSize: 13, color: "#a9bdd4" }}>
-              Session active for {session.wallet}
-            </p>
-          ) : null}
+          {session ? <p style={{ fontSize: 13, color: "#a9bdd4" }}>Session active for {session.wallet}</p> : null}
 
           <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
             <button onClick={() => setMode("wallet")}>Wallet</button>
