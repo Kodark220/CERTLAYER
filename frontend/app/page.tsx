@@ -339,7 +339,7 @@ export default function HomePage() {
           <p className="hero-copy">Private operational view for protocol teams.</p>
           {session ? (
             <p className="muted" style={{ marginTop: 10 }}>
-              Signed in: {session.wallet} ({session.role})
+              Signed in: <span className="mono">{session.wallet}</span> ({session.role})
             </p>
           ) : null}
         </section>
@@ -600,7 +600,10 @@ export default function HomePage() {
           <h1 className="hero-title" style={{ fontSize: 30, marginBottom: 8 }}>
             API Portal
           </h1>
-          <p className="hero-copy">For funds, analysts, and partners buying reputation data.</p>
+          <div className="meta-row" style={{ marginBottom: 8 }}>
+            <p className="hero-copy">For funds, analysts, and partners buying reputation data.</p>
+            <span className="status-chip chip-neutral">Read-only Preview</span>
+          </div>
         </section>
         <section className="card">
           <h3 className="surface-title">Key Management</h3>
@@ -639,7 +642,7 @@ export default function HomePage() {
         <article className="card">
           <h2 className="surface-title">Sign In</h2>
           <p className="hero-copy" style={{ marginBottom: 10 }}>Access protocol dashboard or API portal.</p>
-          {session ? <p className="muted">Session active for {session.wallet}</p> : null}
+          {session ? <p className="muted">Session active for <span className="mono">{session.wallet}</span></p> : null}
 
           <div className="btn-row" style={{ marginBottom: 14 }}>
             <button className={mode === "wallet" ? "btn-primary" : "btn-secondary"} onClick={() => setMode("wallet")}>
@@ -674,6 +677,7 @@ export default function HomePage() {
             </div>
           )}
 
+          <div className="subtle-divider" />
           <div className="btn-row" style={{ marginTop: 14 }}>
             <button className="btn-primary" onClick={() => openProtectedView("protocol")}>Open Protocol Dashboard</button>
             <button className="btn-secondary" onClick={() => openProtectedView("api")}>Open API Portal</button>

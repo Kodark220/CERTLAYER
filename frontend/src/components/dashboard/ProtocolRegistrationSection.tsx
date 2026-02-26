@@ -83,7 +83,7 @@ export function ProtocolRegistrationSection({
         </button>
         {success ? <p className="success-text">{success}</p> : null}
         {txHash ? (
-          <p className="muted" style={{ fontSize: 12, wordBreak: "break-all" }}>
+          <p className="muted mono" style={{ fontSize: 12, wordBreak: "break-all" }}>
             Tx Hash: {txHash}
           </p>
         ) : null}
