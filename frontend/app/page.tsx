@@ -327,25 +327,48 @@ export default function HomePage() {
     return (
       <main className="shell grid" style={{ gap: 18 }}>
         <section className="card">
-          <h1>Protocol Dashboard</h1>
-          <p>Private operational view for protocol teams.</p>
+          <div className="meta-row" style={{ marginBottom: 10 }}>
+            <h1 className="hero-title" style={{ fontSize: 30, marginBottom: 0 }}>
+              Protocol Dashboard
+            </h1>
+            <span className="status-chip">
+              <span className="status-dot" />
+              Live Monitoring
+            </span>
+          </div>
+          <p className="hero-copy">Private operational view for protocol teams.</p>
           {session ? (
-            <p style={{ color: "#a9bdd4", fontSize: 13 }}>
+            <p className="muted" style={{ marginTop: 10 }}>
               Signed in: {session.wallet} ({session.role})
             </p>
           ) : null}
         </section>
 
-        <section className="grid grid-2">
-          <div className="kpi">Reputation Score<strong>78.4 (A)</strong></div>
-          <div className="kpi">Coverage Pool<strong>245,000 USDC</strong></div>
-          <div className="kpi">30d Uptime<strong>99.82%</strong></div>
-          <div className="kpi">Compensation Paid<strong>12,430 USDC</strong></div>
+        <section className="dashboard-kpis">
+          <div className="kpi kpi-primary">
+            <span className="kpi-label">Reputation Score</span>
+            <strong>78.4 (A)</strong>
+            <span className="kpi-subtle">Updated 2 min ago</span>
+          </div>
+          <div className="kpi-column">
+            <div className="kpi">
+              <span className="kpi-label">Coverage Pool</span>
+              <strong>245,000 USDC</strong>
+            </div>
+            <div className="kpi">
+              <span className="kpi-label">30d Uptime</span>
+              <strong>99.82% ↑</strong>
+            </div>
+            <div className="kpi">
+              <span className="kpi-label">Compensation Paid</span>
+              <strong>12,430 USDC</strong>
+            </div>
+          </div>
         </section>
 
         <section className="card">
-          <h3>Next modules</h3>
-          <p>Incidents, Coverage Pool, Reputation Breakdown, API Access, Team Roles.</p>
+          <h3 className="surface-title">Next modules</h3>
+          <p className="hero-copy">Incidents, Coverage Pool, Reputation Breakdown, API Access, Team Roles.</p>
         </section>
 
         <ProtocolRegistrationSection
@@ -561,9 +584,9 @@ export default function HomePage() {
         ) : null}
 
         <section className="card">
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setView("landing")}>Back</button>
-            <button onClick={signOut}>Sign Out</button>
+          <div className="btn-row">
+            <button className="btn-secondary" onClick={() => setView("landing")}>Back</button>
+            <button className="btn-primary" onClick={signOut}>Sign Out</button>
           </div>
         </section>
       </main>
@@ -574,15 +597,17 @@ export default function HomePage() {
     return (
       <main className="shell grid" style={{ gap: 18 }}>
         <section className="card">
-          <h1>API Portal</h1>
-          <p>For funds, analysts, and partners buying reputation data.</p>
+          <h1 className="hero-title" style={{ fontSize: 30, marginBottom: 8 }}>
+            API Portal
+          </h1>
+          <p className="hero-copy">For funds, analysts, and partners buying reputation data.</p>
         </section>
         <section className="card">
-          <h3>Key Management</h3>
-          <p>Generate, rotate, and revoke keys. Monitor usage and billing.</p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setView("landing")}>Back</button>
-            <button onClick={signOut}>Sign Out</button>
+          <h3 className="surface-title">Key Management</h3>
+          <p className="hero-copy">Generate, rotate, and revoke keys. Monitor usage and billing.</p>
+          <div className="btn-row" style={{ marginTop: 12 }}>
+            <button className="btn-secondary" onClick={() => setView("landing")}>Back</button>
+            <button className="btn-primary" onClick={signOut}>Sign Out</button>
           </div>
         </section>
       </main>
@@ -593,43 +618,47 @@ export default function HomePage() {
     <main className="shell grid" style={{ gap: 18 }}>
       <section className="grid grid-2">
         <article className="card">
-          <h1>CertLayer</h1>
-          <p>{headline}</p>
-          <p>
+          <h1 className="hero-title">CertLayer</h1>
+          <p className="hero-copy" style={{ marginBottom: 8 }}>{headline}</p>
+          <p className="hero-copy">
             Protocols pay you to hold them accountable. Users are compensated automatically when SLA breaches are
             verified.
           </p>
           <div className="grid" style={{ marginTop: 12 }}>
-            <div className="kpi">Protocols monitored<strong>0</strong></div>
-            <div className="kpi">Compensation executed<strong>0 USDC</strong></div>
-            <div className="kpi">Endpoints watched<strong>0</strong></div>
+            <div className="kpi"><span className="kpi-label">Protocols monitored</span><strong>0</strong></div>
+            <div className="kpi"><span className="kpi-label">Compensation executed</span><strong>0 USDC</strong></div>
+            <div className="kpi"><span className="kpi-label">Endpoints watched</span><strong>0</strong></div>
           </div>
           <div style={{ marginTop: 12 }}>
             <Link href="/explorer">
-              <button>View Public Reputation Explorer</button>
+              <button className="btn-secondary">View Public Reputation Explorer</button>
             </Link>
           </div>
         </article>
 
         <article className="card">
-          <h2>Sign In</h2>
-          <p>Access protocol dashboard or API portal.</p>
-          {session ? <p style={{ fontSize: 13, color: "#a9bdd4" }}>Session active for {session.wallet}</p> : null}
+          <h2 className="surface-title">Sign In</h2>
+          <p className="hero-copy" style={{ marginBottom: 10 }}>Access protocol dashboard or API portal.</p>
+          {session ? <p className="muted">Session active for {session.wallet}</p> : null}
 
-          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-            <button onClick={() => setMode("wallet")}>Wallet</button>
-            <button onClick={() => setMode("email")}>Email</button>
+          <div className="btn-row" style={{ marginBottom: 14 }}>
+            <button className={mode === "wallet" ? "btn-primary" : "btn-secondary"} onClick={() => setMode("wallet")}>
+              Wallet
+            </button>
+            <button className={mode === "email" ? "btn-primary" : "btn-secondary"} onClick={() => setMode("email")}>
+              Email
+            </button>
           </div>
 
           {mode === "wallet" ? (
             <div className="grid">
-              <button onClick={signInWithMetaMask} disabled={loadingAuth}>
+              <button className="btn-primary" onClick={signInWithMetaMask} disabled={loadingAuth}>
                 {loadingAuth ? "Signing in..." : "Connect + Sign (MetaMask)"}
               </button>
-              <p style={{ fontSize: 12, color: "#9eb4cc" }}>
+              <p className="muted" style={{ fontSize: 12 }}>
                 Sign a nonce message to authenticate. No transaction required.
               </p>
-              {authError ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{authError}</p> : null}
+              {authError ? <p className="error-text">{authError}</p> : null}
             </div>
           ) : (
             <div className="grid">
@@ -641,13 +670,13 @@ export default function HomePage() {
                 <label className="label">Password</label>
                 <input type="password" placeholder="********" />
               </div>
-              <button>Sign In</button>
+              <button className="btn-primary">Sign In</button>
             </div>
           )}
 
-          <div style={{ marginTop: 14, display: "flex", gap: 8 }}>
-            <button onClick={() => openProtectedView("protocol")}>Open Protocol Dashboard</button>
-            <button onClick={() => openProtectedView("api")}>Open API Portal</button>
+          <div className="btn-row" style={{ marginTop: 14 }}>
+            <button className="btn-primary" onClick={() => openProtectedView("protocol")}>Open Protocol Dashboard</button>
+            <button className="btn-secondary" onClick={() => openProtectedView("api")}>Open API Portal</button>
           </div>
         </article>
       </section>

@@ -29,7 +29,7 @@ export function SecurityRecoverySection({
 }: Props) {
   return (
     <section className="card">
-      <h3>Security & Recovery (Admin)</h3>
+      <h3 className="surface-title">Security & Recovery (Admin)</h3>
       <div className="grid">
         <div>
           <label className="label">Security Incident ID</label>
@@ -55,7 +55,7 @@ export function SecurityRecoverySection({
             placeholder="official,peckshield"
           />
         </div>
-        <button disabled={loading} onClick={onCreateSecurityIncident}>
+        <button className="btn-primary" disabled={loading} onClick={onCreateSecurityIncident}>
           {loading ? "Running..." : "Create Security Incident"}
         </button>
 
@@ -67,7 +67,7 @@ export function SecurityRecoverySection({
           <label className="label">Loss Amounts CSV</label>
           <input value={form.lossesCsv} onChange={(e) => onFieldChange("lossesCsv", e.target.value)} />
         </div>
-        <button disabled={loading} onClick={onAttachLossSnapshot}>
+        <button className="btn-secondary" disabled={loading} onClick={onAttachLossSnapshot}>
           {loading ? "Running..." : "Attach Loss Snapshot"}
         </button>
 
@@ -75,7 +75,7 @@ export function SecurityRecoverySection({
           <label className="label">Recovery Amount</label>
           <input value={form.recoveryAmount} onChange={(e) => onFieldChange("recoveryAmount", e.target.value)} />
         </div>
-        <button disabled={loading} onClick={onRecordRecovery}>{loading ? "Running..." : "Record Recovery"}</button>
+        <button className="btn-secondary" disabled={loading} onClick={onRecordRecovery}>{loading ? "Running..." : "Record Recovery"}</button>
 
         <div>
           <label className="label">Recovery Start Index</label>
@@ -88,7 +88,7 @@ export function SecurityRecoverySection({
           <label className="label">Recovery Limit</label>
           <input value={form.recoveryLimit} onChange={(e) => onFieldChange("recoveryLimit", e.target.value)} />
         </div>
-        <button disabled={loading} onClick={onDistributeRecoveryBatch}>
+        <button className="btn-secondary" disabled={loading} onClick={onDistributeRecoveryBatch}>
           {loading ? "Running..." : "Distribute Recovery Batch"}
         </button>
 
@@ -118,17 +118,17 @@ export function SecurityRecoverySection({
           <label className="label">Recovery Effort</label>
           <input value={form.recoveryEffort} onChange={(e) => onFieldChange("recoveryEffort", e.target.value)} />
         </div>
-        <button disabled={loading} onClick={onSetHackScores}>
+        <button className="btn-secondary" disabled={loading} onClick={onSetHackScores}>
           {loading ? "Running..." : "Set Hack Response Scores"}
         </button>
 
-        {error ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{error}</p> : null}
+        {error ? <p className="error-text">{error}</p> : null}
         {log.length > 0 ? (
           <div>
             <label className="label">Security Log</label>
             <div className="grid">
               {log.map((line, idx) => (
-                <div key={`${line}-${idx}`} className="kpi" style={{ fontSize: 12 }}>
+                <div key={`${line}-${idx}`} className="kpi muted" style={{ fontSize: 12 }}>
                   {line}
                 </div>
               ))}

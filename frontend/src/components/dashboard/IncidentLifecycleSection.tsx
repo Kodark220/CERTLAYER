@@ -33,8 +33,10 @@ export function IncidentLifecycleSection({
 }: Props) {
   return (
     <section className="card">
-      <h3>Incident Lifecycle (Admin)</h3>
-      <p>Create incident, attach affected users, challenge/dispute, finalize, payout batch.</p>
+      <h3 className="surface-title">Incident Lifecycle (Admin)</h3>
+      <p className="hero-copy" style={{ marginBottom: 10 }}>
+        Create incident, attach affected users, challenge/dispute, finalize, payout batch.
+      </p>
       <div className="grid">
         <div>
           <label className="label">Incident ID</label>
@@ -48,7 +50,7 @@ export function IncidentLifecycleSection({
           <label className="label">Evidence Hash</label>
           <input value={form.evidenceHash} onChange={(e) => onFieldChange("evidenceHash", e.target.value)} />
         </div>
-        <button disabled={loading} onClick={onCreateIncident}>{loading ? "Running..." : "1) Create Incident"}</button>
+        <button className="btn-primary" disabled={loading} onClick={onCreateIncident}>{loading ? "Running..." : "1) Create Incident"}</button>
 
         <div>
           <label className="label">Wallets CSV</label>
@@ -58,7 +60,7 @@ export function IncidentLifecycleSection({
           <label className="label">Amounts CSV</label>
           <input value={form.amountsCsv} onChange={(e) => onFieldChange("amountsCsv", e.target.value)} />
         </div>
-        <button disabled={loading} onClick={onAttachAffectedUsers}>
+        <button className="btn-secondary" disabled={loading} onClick={onAttachAffectedUsers}>
           {loading ? "Running..." : "2) Attach Affected Users"}
         </button>
 
@@ -69,7 +71,7 @@ export function IncidentLifecycleSection({
             onChange={(e) => onFieldChange("challengeEndsTs", e.target.value)}
           />
         </div>
-        <button disabled={loading} onClick={onOpenChallenge}>
+        <button className="btn-secondary" disabled={loading} onClick={onOpenChallenge}>
           {loading ? "Running..." : "3) Open Challenge Window"}
         </button>
 
@@ -84,7 +86,7 @@ export function IncidentLifecycleSection({
             onChange={(e) => onFieldChange("disputeEvidenceHash", e.target.value)}
           />
         </div>
-        <button disabled={loading} onClick={onRaiseDispute}>
+        <button className="btn-secondary" disabled={loading} onClick={onRaiseDispute}>
           {loading ? "Running..." : "4) Raise Dispute (optional)"}
         </button>
 
@@ -95,11 +97,11 @@ export function IncidentLifecycleSection({
             <option value="rejected">rejected</option>
           </select>
         </div>
-        <button disabled={loading} onClick={onResolveDispute}>
+        <button className="btn-secondary" disabled={loading} onClick={onResolveDispute}>
           {loading ? "Running..." : "5) Resolve Dispute (optional)"}
         </button>
 
-        <button disabled={loading} onClick={onFinalizeIncident}>
+        <button className="btn-secondary" disabled={loading} onClick={onFinalizeIncident}>
           {loading ? "Running..." : "6) Finalize Incident"}
         </button>
 
@@ -111,17 +113,17 @@ export function IncidentLifecycleSection({
           <label className="label">Payout Limit</label>
           <input value={form.payoutLimit} onChange={(e) => onFieldChange("payoutLimit", e.target.value)} />
         </div>
-        <button disabled={loading} onClick={onExecutePayoutBatch}>
+        <button className="btn-secondary" disabled={loading} onClick={onExecutePayoutBatch}>
           {loading ? "Running..." : "7) Execute Payout Batch"}
         </button>
 
-        {error ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{error}</p> : null}
+        {error ? <p className="error-text">{error}</p> : null}
         {log.length > 0 ? (
           <div>
             <label className="label">Lifecycle Log</label>
             <div className="grid">
               {log.map((line, idx) => (
-                <div key={`${line}-${idx}`} className="kpi" style={{ fontSize: 12 }}>
+                <div key={`${line}-${idx}`} className="kpi muted" style={{ fontSize: 12 }}>
                   {line}
                 </div>
               ))}

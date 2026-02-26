@@ -27,7 +27,7 @@ export function CommitmentsSection({
 }: Props) {
   return (
     <section className="card">
-      <h3>Commitments (Admin)</h3>
+      <h3 className="surface-title">Commitments (Admin)</h3>
       <div className="grid">
         <div>
           <label className="label">Commitment ID</label>
@@ -62,7 +62,7 @@ export function CommitmentsSection({
           <label className="label">Verification Rule</label>
           <input value={form.verificationRule} onChange={(e) => onFieldChange("verificationRule", e.target.value)} />
         </div>
-        <button disabled={loading} onClick={onRegister}>{loading ? "Running..." : "Register Commitment"}</button>
+        <button className="btn-primary" disabled={loading} onClick={onRegister}>{loading ? "Running..." : "Register Commitment"}</button>
 
         <div>
           <label className="label">Evaluate Result</label>
@@ -76,19 +76,19 @@ export function CommitmentsSection({
           <label className="label">Evidence Hash</label>
           <input value={form.evidenceHash} onChange={(e) => onFieldChange("evidenceHash", e.target.value)} />
         </div>
-        <button disabled={loading} onClick={onEvaluate}>{loading ? "Running..." : "Evaluate Commitment"}</button>
-        <button disabled={loading} onClick={onSubmitEvidence}>
+        <button className="btn-secondary" disabled={loading} onClick={onEvaluate}>{loading ? "Running..." : "Evaluate Commitment"}</button>
+        <button className="btn-secondary" disabled={loading} onClick={onSubmitEvidence}>
           {loading ? "Running..." : "Submit Grace Evidence"}
         </button>
-        <button disabled={loading} onClick={onFinalize}>{loading ? "Running..." : "Finalize Commitment"}</button>
+        <button className="btn-secondary" disabled={loading} onClick={onFinalize}>{loading ? "Running..." : "Finalize Commitment"}</button>
 
-        {error ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{error}</p> : null}
+        {error ? <p className="error-text">{error}</p> : null}
         {log.length > 0 ? (
           <div>
             <label className="label">Commitment Log</label>
             <div className="grid">
               {log.map((line, idx) => (
-                <div key={`${line}-${idx}`} className="kpi" style={{ fontSize: 12 }}>
+                <div key={`${line}-${idx}`} className="kpi muted" style={{ fontSize: 12 }}>
                   {line}
                 </div>
               ))}

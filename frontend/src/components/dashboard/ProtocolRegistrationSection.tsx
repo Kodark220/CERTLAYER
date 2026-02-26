@@ -29,8 +29,8 @@ export function ProtocolRegistrationSection({
 }: Props) {
   return (
     <section className="card">
-      <h3>Register Protocol</h3>
-      <p>Owner wallet is taken from your signed session.</p>
+      <h3 className="surface-title">Register Protocol</h3>
+      <p className="hero-copy" style={{ marginBottom: 10 }}>Owner wallet is taken from your signed session.</p>
       <div className="grid">
         <div>
           <label className="label">Protocol ID (optional)</label>
@@ -78,12 +78,12 @@ export function ProtocolRegistrationSection({
             placeholder="9990"
           />
         </div>
-        <button onClick={onSubmit} disabled={loading}>
+        <button className="btn-primary" onClick={onSubmit} disabled={loading}>
           {loading ? "Submitting..." : "Register Protocol On-Chain"}
         </button>
-        {success ? <p style={{ color: "#a8f0bf", fontSize: 13 }}>{success}</p> : null}
+        {success ? <p className="success-text">{success}</p> : null}
         {txHash ? (
-          <p style={{ fontSize: 12, color: "#9eb4cc", wordBreak: "break-all" }}>
+          <p className="muted" style={{ fontSize: 12, wordBreak: "break-all" }}>
             Tx Hash: {txHash}
           </p>
         ) : null}
@@ -97,7 +97,7 @@ export function ProtocolRegistrationSection({
             />
           </div>
         ) : null}
-        {error ? <p style={{ color: "#ff9d9d", fontSize: 13 }}>{error}</p> : null}
+        {error ? <p className="error-text">{error}</p> : null}
       </div>
     </section>
   );
