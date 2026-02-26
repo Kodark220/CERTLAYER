@@ -2,15 +2,21 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
 import { injected } from "wagmi/connectors";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommitmentsSection } from "../src/components/dashboard/CommitmentsSection";
 import { IncidentLifecycleSection } from "../src/components/dashboard/IncidentLifecycleSection";
 import { ProtocolRegistrationSection } from "../src/components/dashboard/ProtocolRegistrationSection";
 import { SecurityRecoverySection } from "../src/components/dashboard/SecurityRecoverySection";
 import { UptimeChart } from "../src/components/dashboard/UptimeChart";
+import { PageHeader } from "../src/components/layout/PageHeader";
+import { PageShell } from "../src/components/layout/PageShell";
 import {
   AuthSession,
   CommitmentForm,
@@ -74,6 +80,24 @@ const initialSecurityForm: SecurityForm = {
   postMortemQuality: "0",
   recoveryEffort: "0",
 };
+
+function MetricCard({ label, value, meta, primary = false }: { label: string; value: string; meta?: string; primary?: boolean }) {
+  return (
+    <Card className={`border-border/70 bg-card shadow-sm ${primary ? "md:col-span-2" : ""}`}>
+      <CardHeader className="space-y-2">
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-3xl font-semibold tracking-tight">{value}</CardTitle>
+        {meta ? (
+          <div>
+            <Badge variant="secondary" className="border border-border/80 bg-secondary/40 text-xs">
+              {meta}
+            </Badge>
+          </div>
+        ) : null}
+      </CardHeader>
+    </Card>
+  );
+}
 
 export default function HomePage() {
   const { address, isConnected } = useAccount();
@@ -337,59 +361,45 @@ export default function HomePage() {
 
   if (view === "protocol") {
     return (
-      <main className="shell grid" style={{ gap: 18 }}>
-        <section className="card">
-          <div className="meta-row" style={{ marginBottom: 10 }}>
-            <h1 className="hero-title" style={{ fontSize: 30, marginBottom: 0 }}>
-              Protocol Dashboard
-            </h1>
-            <span className="status-chip">
-              <span className="status-dot" />
-              Live Monitoring
-            </span>
-          </div>
-          <p className="hero-copy">Private operational view for protocol teams.</p>
-          {session ? (
-            <p className="muted" style={{ marginTop: 10 }}>
-              Signed in: <span className="mono">{session.wallet}</span> ({session.role})
-            </p>
-          ) : null}
-        </section>
+      <PageShell>
+        <PageHeader
+          title="Protocol Dashboard"
+          description="Private operational view for protocol teams."
+          status="Live Monitoring"
+          meta={
+            session ? (
+              <p className="text-sm text-muted-foreground">
+                Signed in: <span className="font-mono">{session.wallet}</span> ({session.role})
+              </p>
+            ) : undefined
+          }
+        />
 
-        <section className="dashboard-kpis">
-          <div className="kpi kpi-primary">
-            <span className="kpi-label">Reputation Score</span>
-            <strong>78.4 (A)</strong>
-            <span className="kpi-subtle">Updated 2 min ago</span>
-          </div>
-          <div className="kpi-column">
-            <div className="kpi">
-              <span className="kpi-label">Coverage Pool</span>
-              <strong>245,000 USDC</strong>
-            </div>
-            <div className="kpi">
-              <span className="kpi-label">30d Uptime</span>
-              <strong>99.82% ↑</strong>
-            </div>
-            <div className="kpi">
-              <span className="kpi-label">Compensation Paid</span>
-              <strong>12,430 USDC</strong>
-            </div>
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          <MetricCard label="Reputation Score" value="78.4 (A)" meta="Updated 2 min ago" primary />
+          <div className="grid gap-4 md:col-span-1">
+            <MetricCard label="Coverage Pool" value="245,000 USDC" />
+            <MetricCard label="30d Uptime" value="99.82% ↑" />
+            <MetricCard label="Compensation Paid" value="12,430 USDC" />
           </div>
         </section>
 
-        <section className="card">
-          <h3 className="surface-title">Next modules</h3>
-          <p className="hero-copy">Incidents, Coverage Pool, Reputation Breakdown, API Access, Team Roles.</p>
-        </section>
+        <Card className="border-border/70 bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle>Next modules</CardTitle>
+            <CardDescription>Incidents, Coverage Pool, Reputation Breakdown, API Access, Team Roles.</CardDescription>
+          </CardHeader>
+        </Card>
 
-        <section className="card">
-          <h3 className="surface-title">Uptime Trend (90d)</h3>
-          <p className="hero-copy" style={{ marginBottom: 12 }}>
-            Reliability trend preview for internal operations.
-          </p>
-          <UptimeChart />
-        </section>
+        <Card className="border-border/70 bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle>Uptime Trend (90d)</CardTitle>
+            <CardDescription>Reliability trend preview for internal operations.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <UptimeChart />
+          </CardContent>
+        </Card>
 
         <ProtocolRegistrationSection
           form={registerForm}
@@ -603,35 +613,9 @@ export default function HomePage() {
           />
         ) : null}
 
-        <section className="card">
-          <div className="btn-row">
-            <button className="btn-secondary" onClick={() => setView("landing")}>Back</button>
-            <button className="btn-primary" onClick={signOut}>Sign Out</button>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
-  if (view === "api") {
-    return (
-      <main className="shell grid" style={{ gap: 18 }}>
-        <section className="card">
-          <h1 className="hero-title" style={{ fontSize: 30, marginBottom: 8 }}>
-            API Portal
-          </h1>
-          <div className="meta-row" style={{ marginBottom: 8 }}>
-            <p className="hero-copy">For funds, analysts, and partners buying reputation data.</p>
-            <span className="status-chip chip-neutral">Read-only Preview</span>
-          </div>
-        </section>
-        <Card className="border-white/10 bg-[var(--bg-2)] text-[var(--text)] shadow-[0_10px_30px_rgba(0,0,0,0.32)]">
-          <CardHeader className="pb-3">
-            <CardTitle className="surface-title">Key Management</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="hero-copy">Generate, rotate, and revoke keys. Monitor usage and billing.</p>
-            <div className="btn-row" style={{ marginTop: 12 }}>
+        <Card className="border-border/70 bg-card shadow-sm">
+          <CardContent className="pt-6">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => setView("landing")}>
                 Back
               </Button>
@@ -639,86 +623,124 @@ export default function HomePage() {
             </div>
           </CardContent>
         </Card>
-      </main>
+      </PageShell>
+    );
+  }
+
+  if (view === "api") {
+    return (
+      <PageShell>
+        <PageHeader
+          title="API Portal"
+          description="For funds, analysts, and partners buying reputation data."
+          status="Read-only Preview"
+        />
+        <Card className="border-border/70 bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle>Key Management</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">Generate, rotate, and revoke keys. Monitor usage and billing.</p>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setView("landing")}>
+                Back
+              </Button>
+              <Button onClick={signOut}>Sign Out</Button>
+            </div>
+          </CardContent>
+        </Card>
+      </PageShell>
     );
   }
 
   return (
-    <main className="shell grid" style={{ gap: 18 }}>
-      <section className="grid grid-2">
-        <article className="card">
-          <h1 className="hero-title">CertLayer</h1>
-          <p className="hero-copy" style={{ marginBottom: 8 }}>{headline}</p>
-          <p className="hero-copy">
-            Protocols pay you to hold them accountable. Users are compensated automatically when SLA breaches are
-            verified.
-          </p>
-          <div className="grid" style={{ marginTop: 12 }}>
-            <div className="kpi"><span className="kpi-label">Protocols monitored</span><strong>0</strong></div>
-            <div className="kpi"><span className="kpi-label">Compensation executed</span><strong>0 USDC</strong></div>
-            <div className="kpi"><span className="kpi-label">Endpoints watched</span><strong>0</strong></div>
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <Link href="/explorer">
-              <button className="btn-secondary">View Public Reputation Explorer</button>
-            </Link>
-          </div>
-        </article>
+    <PageShell>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card className="border-border/70 bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-3xl font-semibold tracking-tight">CERTLAYER</CardTitle>
+            <CardDescription className="text-sm text-muted-foreground">{headline}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Protocols pay you to hold them accountable. Users are compensated automatically when SLA breaches are
+              verified.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground">Protocols monitored</p>
+                <p className="mt-1 text-2xl font-semibold">0</p>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground">Compensation executed</p>
+                <p className="mt-1 text-2xl font-semibold">0 USDC</p>
+              </div>
+              <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                <p className="text-xs text-muted-foreground">Endpoints watched</p>
+                <p className="mt-1 text-2xl font-semibold">0</p>
+              </div>
+            </div>
+            <Button asChild variant="outline">
+              <Link href="/explorer">View Public Reputation Explorer</Link>
+            </Button>
+          </CardContent>
+        </Card>
 
-        <article className="card">
-          <h2 className="surface-title">Sign In</h2>
-          <p className="hero-copy" style={{ marginBottom: 10 }}>Access protocol dashboard or API portal.</p>
-          {session ? <p className="muted">Session active for <span className="mono">{session.wallet}</span></p> : null}
-
-          <div className="btn-row" style={{ marginBottom: 14 }}>
-            <button className={mode === "wallet" ? "btn-primary" : "btn-secondary"} onClick={() => setMode("wallet")}>
-              Wallet
-            </button>
-            <button className={mode === "email" ? "btn-primary" : "btn-secondary"} onClick={() => setMode("email")}>
-              Email
-            </button>
-          </div>
-
-          {mode === "wallet" ? (
-            <div className="grid">
-              <button className="btn-primary" onClick={signInWithMetaMask} disabled={loadingAuth}>
-                {loadingAuth || isConnecting
-                  ? "Signing in..."
-                  : isConnected
-                    ? "Sign In with Connected Wallet"
-                    : "Connect + Sign (MetaMask)"}
-              </button>
-              <p className="muted" style={{ fontSize: 12 }}>
-                Sign a nonce message to authenticate. No transaction required.
+        <Card className="border-border/70 bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle>Sign In</CardTitle>
+            <CardDescription>Access protocol dashboard or API portal.</CardDescription>
+            {session ? (
+              <p className="text-xs text-muted-foreground">
+                Session active for <span className="font-mono">{session.wallet}</span>
               </p>
-              {isConnected && address ? (
-                <p className="muted" style={{ fontSize: 12 }}>
-                  Connected wallet: <span className="mono">{address}</span>
-                </p>
-              ) : null}
-              {authError ? <p className="error-text">{authError}</p> : null}
-            </div>
-          ) : (
-            <div className="grid">
-              <div>
-                <label className="label">Email</label>
-                <input placeholder="you@company.com" />
-              </div>
-              <div>
-                <label className="label">Password</label>
-                <input type="password" placeholder="********" />
-              </div>
-              <button className="btn-primary">Sign In</button>
-            </div>
-          )}
+            ) : null}
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Tabs value={mode} onValueChange={(value) => setMode(value as Mode)}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="wallet">Wallet</TabsTrigger>
+                <TabsTrigger value="email">Email</TabsTrigger>
+              </TabsList>
+              <TabsContent value="wallet" className="mt-4 space-y-3">
+                <Button className="w-full" onClick={signInWithMetaMask} disabled={loadingAuth || isConnecting}>
+                  {loadingAuth || isConnecting
+                    ? "Signing in..."
+                    : isConnected
+                      ? "Sign In with Connected Wallet"
+                      : "Connect + Sign (MetaMask)"}
+                </Button>
+                <p className="text-xs text-muted-foreground">Sign a nonce message to authenticate. No transaction required.</p>
+                {isConnected && address ? (
+                  <p className="text-xs text-muted-foreground">
+                    Connected wallet: <span className="font-mono">{address}</span>
+                  </p>
+                ) : null}
+                {authError ? <p className="text-sm text-destructive">{authError}</p> : null}
+              </TabsContent>
+              <TabsContent value="email" className="mt-4 space-y-3">
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input placeholder="you@company.com" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Password</Label>
+                  <Input type="password" placeholder="********" />
+                </div>
+                <Button>Sign In</Button>
+              </TabsContent>
+            </Tabs>
 
-          <div className="subtle-divider" />
-          <div className="btn-row" style={{ marginTop: 14 }}>
-            <button className="btn-primary" onClick={() => openProtectedView("protocol")}>Open Protocol Dashboard</button>
-            <button className="btn-secondary" onClick={() => openProtectedView("api")}>Open API Portal</button>
-          </div>
-        </article>
-      </section>
-    </main>
+            <div className="h-px bg-border/70" />
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => openProtectedView("protocol")}>Open Protocol Dashboard</Button>
+              <Button variant="outline" onClick={() => openProtectedView("api")}>
+                Open API Portal
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </PageShell>
   );
 }

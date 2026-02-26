@@ -1,5 +1,9 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { SecurityForm } from "../../types/dashboard";
 
 type Props = {
@@ -28,114 +32,116 @@ export function SecurityRecoverySection({
   onSetHackScores,
 }: Props) {
   return (
-    <section className="card">
-      <h3 className="surface-title">Security & Recovery (Admin)</h3>
-      <div className="grid">
-        <div>
-          <label className="label">Security Incident ID</label>
-          <input value={form.incidentId} onChange={(e) => onFieldChange("incidentId", e.target.value)} />
+    <Card className="border-border/70 bg-card shadow-sm">
+      <CardHeader>
+        <CardTitle>Security & Recovery (Admin)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Security Incident ID</Label>
+            <Input value={form.incidentId} onChange={(e) => onFieldChange("incidentId", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Start TS</Label>
+            <Input value={form.startTs} onChange={(e) => onFieldChange("startTs", e.target.value)} />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Evidence Hash</Label>
+            <Input value={form.evidenceHash} onChange={(e) => onFieldChange("evidenceHash", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Last Clean Block</Label>
+            <Input value={form.lastCleanBlock} onChange={(e) => onFieldChange("lastCleanBlock", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Trigger Sources CSV</Label>
+            <Input value={form.triggerSourcesCsv} onChange={(e) => onFieldChange("triggerSourcesCsv", e.target.value)} placeholder="official,peckshield" />
+          </div>
         </div>
-        <div>
-          <label className="label">Start TS</label>
-          <input value={form.startTs} onChange={(e) => onFieldChange("startTs", e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Evidence Hash</label>
-          <input value={form.evidenceHash} onChange={(e) => onFieldChange("evidenceHash", e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Last Clean Block</label>
-          <input value={form.lastCleanBlock} onChange={(e) => onFieldChange("lastCleanBlock", e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Trigger Sources CSV</label>
-          <input
-            value={form.triggerSourcesCsv}
-            onChange={(e) => onFieldChange("triggerSourcesCsv", e.target.value)}
-            placeholder="official,peckshield"
-          />
-        </div>
-        <button className="btn-primary" disabled={loading} onClick={onCreateSecurityIncident}>
+        <Button onClick={onCreateSecurityIncident} disabled={loading}>
           {loading ? "Running..." : "Create Security Incident"}
-        </button>
+        </Button>
 
-        <div>
-          <label className="label">Loss Wallets CSV</label>
-          <input value={form.walletsCsv} onChange={(e) => onFieldChange("walletsCsv", e.target.value)} />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Loss Wallets CSV</Label>
+            <Input value={form.walletsCsv} onChange={(e) => onFieldChange("walletsCsv", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Loss Amounts CSV</Label>
+            <Input value={form.lossesCsv} onChange={(e) => onFieldChange("lossesCsv", e.target.value)} />
+          </div>
         </div>
-        <div>
-          <label className="label">Loss Amounts CSV</label>
-          <input value={form.lossesCsv} onChange={(e) => onFieldChange("lossesCsv", e.target.value)} />
-        </div>
-        <button className="btn-secondary" disabled={loading} onClick={onAttachLossSnapshot}>
+        <Button variant="outline" onClick={onAttachLossSnapshot} disabled={loading}>
           {loading ? "Running..." : "Attach Loss Snapshot"}
-        </button>
+        </Button>
 
-        <div>
-          <label className="label">Recovery Amount</label>
-          <input value={form.recoveryAmount} onChange={(e) => onFieldChange("recoveryAmount", e.target.value)} />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Recovery Amount</Label>
+            <Input value={form.recoveryAmount} onChange={(e) => onFieldChange("recoveryAmount", e.target.value)} />
+          </div>
         </div>
-        <button className="btn-secondary" disabled={loading} onClick={onRecordRecovery}>{loading ? "Running..." : "Record Recovery"}</button>
+        <Button variant="outline" onClick={onRecordRecovery} disabled={loading}>
+          {loading ? "Running..." : "Record Recovery"}
+        </Button>
 
-        <div>
-          <label className="label">Recovery Start Index</label>
-          <input
-            value={form.recoveryStartIndex}
-            onChange={(e) => onFieldChange("recoveryStartIndex", e.target.value)}
-          />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Recovery Start Index</Label>
+            <Input value={form.recoveryStartIndex} onChange={(e) => onFieldChange("recoveryStartIndex", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Recovery Limit</Label>
+            <Input value={form.recoveryLimit} onChange={(e) => onFieldChange("recoveryLimit", e.target.value)} />
+          </div>
         </div>
-        <div>
-          <label className="label">Recovery Limit</label>
-          <input value={form.recoveryLimit} onChange={(e) => onFieldChange("recoveryLimit", e.target.value)} />
-        </div>
-        <button className="btn-secondary" disabled={loading} onClick={onDistributeRecoveryBatch}>
+        <Button variant="outline" onClick={onDistributeRecoveryBatch} disabled={loading}>
           {loading ? "Running..." : "Distribute Recovery Batch"}
-        </button>
+        </Button>
 
-        <div>
-          <label className="label">Response Speed</label>
-          <input value={form.responseSpeed} onChange={(e) => onFieldChange("responseSpeed", e.target.value)} />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Response Speed</Label>
+            <Input value={form.responseSpeed} onChange={(e) => onFieldChange("responseSpeed", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Communication Quality</Label>
+            <Input value={form.communicationQuality} onChange={(e) => onFieldChange("communicationQuality", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Pool Adequacy</Label>
+            <Input value={form.poolAdequacy} onChange={(e) => onFieldChange("poolAdequacy", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Post-Mortem Quality</Label>
+            <Input value={form.postMortemQuality} onChange={(e) => onFieldChange("postMortemQuality", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Recovery Effort</Label>
+            <Input value={form.recoveryEffort} onChange={(e) => onFieldChange("recoveryEffort", e.target.value)} />
+          </div>
         </div>
-        <div>
-          <label className="label">Communication Quality</label>
-          <input
-            value={form.communicationQuality}
-            onChange={(e) => onFieldChange("communicationQuality", e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="label">Pool Adequacy</label>
-          <input value={form.poolAdequacy} onChange={(e) => onFieldChange("poolAdequacy", e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Post-Mortem Quality</label>
-          <input
-            value={form.postMortemQuality}
-            onChange={(e) => onFieldChange("postMortemQuality", e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="label">Recovery Effort</label>
-          <input value={form.recoveryEffort} onChange={(e) => onFieldChange("recoveryEffort", e.target.value)} />
-        </div>
-        <button className="btn-secondary" disabled={loading} onClick={onSetHackScores}>
+        <Button variant="outline" onClick={onSetHackScores} disabled={loading}>
           {loading ? "Running..." : "Set Hack Response Scores"}
-        </button>
+        </Button>
 
-        {error ? <p className="error-text">{error}</p> : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {log.length > 0 ? (
-          <div>
-            <label className="label">Security Log</label>
-            <div className="grid">
+          <div className="space-y-2">
+            <Label>Security Log</Label>
+            <div className="space-y-2">
               {log.map((line, idx) => (
-                <div key={`${line}-${idx}`} className="kpi muted" style={{ fontSize: 12 }}>
+                <div key={`${line}-${idx}`} className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 font-mono text-xs text-muted-foreground">
                   {line}
                 </div>
               ))}
             </div>
           </div>
         ) : null}
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
+

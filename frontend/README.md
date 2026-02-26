@@ -1,4 +1,4 @@
-# CertLayer Frontend
+# CERTLAYER Frontend
 
 Planned surfaces:
 - Public Reputation Explorer (no login)

@@ -1,5 +1,10 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LifecycleForm } from "../../types/dashboard";
 
 type Props = {
@@ -32,105 +37,123 @@ export function IncidentLifecycleSection({
   onExecutePayoutBatch,
 }: Props) {
   return (
-    <section className="card">
-      <h3 className="surface-title">Incident Lifecycle (Admin)</h3>
-      <p className="hero-copy" style={{ marginBottom: 10 }}>
-        Create incident, attach affected users, challenge/dispute, finalize, payout batch.
-      </p>
-      <div className="grid">
-        <div>
-          <label className="label">Incident ID</label>
-          <input value={form.incidentId} onChange={(e) => onFieldChange("incidentId", e.target.value)} />
+    <Card className="border-border/70 bg-card shadow-sm">
+      <CardHeader>
+        <CardTitle>Incident Lifecycle (Admin)</CardTitle>
+        <CardDescription>Create incident, attach affected users, challenge/dispute, finalize, payout batch.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Incident ID</Label>
+            <Input value={form.incidentId} onChange={(e) => onFieldChange("incidentId", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Start TS (unix)</Label>
+            <Input value={form.startTs} onChange={(e) => onFieldChange("startTs", e.target.value)} />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Evidence Hash</Label>
+            <Input value={form.evidenceHash} onChange={(e) => onFieldChange("evidenceHash", e.target.value)} />
+          </div>
         </div>
-        <div>
-          <label className="label">Start TS (unix)</label>
-          <input value={form.startTs} onChange={(e) => onFieldChange("startTs", e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Evidence Hash</label>
-          <input value={form.evidenceHash} onChange={(e) => onFieldChange("evidenceHash", e.target.value)} />
-        </div>
-        <button className="btn-primary" disabled={loading} onClick={onCreateIncident}>{loading ? "Running..." : "1) Create Incident"}</button>
 
-        <div>
-          <label className="label">Wallets CSV</label>
-          <input value={form.walletsCsv} onChange={(e) => onFieldChange("walletsCsv", e.target.value)} />
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={onCreateIncident} disabled={loading}>
+            {loading ? "Running..." : "1) Create Incident"}
+          </Button>
         </div>
-        <div>
-          <label className="label">Amounts CSV</label>
-          <input value={form.amountsCsv} onChange={(e) => onFieldChange("amountsCsv", e.target.value)} />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Wallets CSV</Label>
+            <Input value={form.walletsCsv} onChange={(e) => onFieldChange("walletsCsv", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Amounts CSV</Label>
+            <Input value={form.amountsCsv} onChange={(e) => onFieldChange("amountsCsv", e.target.value)} />
+          </div>
         </div>
-        <button className="btn-secondary" disabled={loading} onClick={onAttachAffectedUsers}>
+        <Button variant="outline" onClick={onAttachAffectedUsers} disabled={loading}>
           {loading ? "Running..." : "2) Attach Affected Users"}
-        </button>
+        </Button>
 
-        <div>
-          <label className="label">Challenge Ends TS</label>
-          <input
-            value={form.challengeEndsTs}
-            onChange={(e) => onFieldChange("challengeEndsTs", e.target.value)}
-          />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Challenge Ends TS</Label>
+            <Input value={form.challengeEndsTs} onChange={(e) => onFieldChange("challengeEndsTs", e.target.value)} />
+          </div>
         </div>
-        <button className="btn-secondary" disabled={loading} onClick={onOpenChallenge}>
+        <Button variant="outline" onClick={onOpenChallenge} disabled={loading}>
           {loading ? "Running..." : "3) Open Challenge Window"}
-        </button>
+        </Button>
 
-        <div>
-          <label className="label">Dispute Wallet</label>
-          <input value={form.disputeWallet} onChange={(e) => onFieldChange("disputeWallet", e.target.value)} />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Dispute Wallet</Label>
+            <Input value={form.disputeWallet} onChange={(e) => onFieldChange("disputeWallet", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Dispute Evidence Hash</Label>
+            <Input value={form.disputeEvidenceHash} onChange={(e) => onFieldChange("disputeEvidenceHash", e.target.value)} />
+          </div>
         </div>
-        <div>
-          <label className="label">Dispute Evidence Hash</label>
-          <input
-            value={form.disputeEvidenceHash}
-            onChange={(e) => onFieldChange("disputeEvidenceHash", e.target.value)}
-          />
-        </div>
-        <button className="btn-secondary" disabled={loading} onClick={onRaiseDispute}>
+        <Button variant="outline" onClick={onRaiseDispute} disabled={loading}>
           {loading ? "Running..." : "4) Raise Dispute (optional)"}
-        </button>
+        </Button>
 
-        <div>
-          <label className="label">Dispute Decision</label>
-          <select value={form.disputeDecision} onChange={(e) => onFieldChange("disputeDecision", e.target.value)}>
-            <option value="approved">approved</option>
-            <option value="rejected">rejected</option>
-          </select>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Dispute Decision</Label>
+            <Select value={form.disputeDecision} onValueChange={(value) => onFieldChange("disputeDecision", value)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="approved">approved</SelectItem>
+                <SelectItem value="rejected">rejected</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-        <button className="btn-secondary" disabled={loading} onClick={onResolveDispute}>
-          {loading ? "Running..." : "5) Resolve Dispute (optional)"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={onResolveDispute} disabled={loading}>
+            {loading ? "Running..." : "5) Resolve Dispute (optional)"}
+          </Button>
+          <Button variant="outline" onClick={onFinalizeIncident} disabled={loading}>
+            {loading ? "Running..." : "6) Finalize Incident"}
+          </Button>
+        </div>
 
-        <button className="btn-secondary" disabled={loading} onClick={onFinalizeIncident}>
-          {loading ? "Running..." : "6) Finalize Incident"}
-        </button>
-
-        <div>
-          <label className="label">Payout Start Index</label>
-          <input value={form.payoutStartIndex} onChange={(e) => onFieldChange("payoutStartIndex", e.target.value)} />
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Payout Start Index</Label>
+            <Input value={form.payoutStartIndex} onChange={(e) => onFieldChange("payoutStartIndex", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Payout Limit</Label>
+            <Input value={form.payoutLimit} onChange={(e) => onFieldChange("payoutLimit", e.target.value)} />
+          </div>
         </div>
-        <div>
-          <label className="label">Payout Limit</label>
-          <input value={form.payoutLimit} onChange={(e) => onFieldChange("payoutLimit", e.target.value)} />
-        </div>
-        <button className="btn-secondary" disabled={loading} onClick={onExecutePayoutBatch}>
+        <Button variant="outline" onClick={onExecutePayoutBatch} disabled={loading}>
           {loading ? "Running..." : "7) Execute Payout Batch"}
-        </button>
+        </Button>
 
-        {error ? <p className="error-text">{error}</p> : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {log.length > 0 ? (
-          <div>
-            <label className="label">Lifecycle Log</label>
-            <div className="grid">
+          <div className="space-y-2">
+            <Label>Lifecycle Log</Label>
+            <div className="space-y-2">
               {log.map((line, idx) => (
-                <div key={`${line}-${idx}`} className="kpi muted" style={{ fontSize: 12 }}>
+                <div key={`${line}-${idx}`} className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 font-mono text-xs text-muted-foreground">
                   {line}
                 </div>
               ))}
             </div>
           </div>
         ) : null}
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
+

@@ -1,5 +1,10 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CommitmentForm } from "../../types/dashboard";
 
 type Props = {
@@ -26,76 +31,99 @@ export function CommitmentsSection({
   onFinalize,
 }: Props) {
   return (
-    <section className="card">
-      <h3 className="surface-title">Commitments (Admin)</h3>
-      <div className="grid">
-        <div>
-          <label className="label">Commitment ID</label>
-          <input value={form.commitmentId} onChange={(e) => onFieldChange("commitmentId", e.target.value)} />
+    <Card className="border-border/70 bg-card shadow-sm">
+      <CardHeader>
+        <CardTitle>Commitments (Admin)</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Commitment ID</Label>
+            <Input value={form.commitmentId} onChange={(e) => onFieldChange("commitmentId", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Type</Label>
+            <Select value={form.commitmentType} onValueChange={(value) => onFieldChange("commitmentType", value)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="governance">governance</SelectItem>
+                <SelectItem value="roadmap">roadmap</SelectItem>
+                <SelectItem value="financial">financial</SelectItem>
+                <SelectItem value="security">security</SelectItem>
+                <SelectItem value="communication">communication</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Source URL</Label>
+            <Input value={form.sourceUrl} onChange={(e) => onFieldChange("sourceUrl", e.target.value)} />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Commitment Text Hash</Label>
+            <Input value={form.commitmentTextHash} onChange={(e) => onFieldChange("commitmentTextHash", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Deadline TS</Label>
+            <Input value={form.deadlineTs} onChange={(e) => onFieldChange("deadlineTs", e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label>Verification Rule</Label>
+            <Input value={form.verificationRule} onChange={(e) => onFieldChange("verificationRule", e.target.value)} />
+          </div>
         </div>
-        <div>
-          <label className="label">Type</label>
-          <select value={form.commitmentType} onChange={(e) => onFieldChange("commitmentType", e.target.value)}>
-            <option value="governance">governance</option>
-            <option value="roadmap">roadmap</option>
-            <option value="financial">financial</option>
-            <option value="security">security</option>
-            <option value="communication">communication</option>
-          </select>
-        </div>
-        <div>
-          <label className="label">Source URL</label>
-          <input value={form.sourceUrl} onChange={(e) => onFieldChange("sourceUrl", e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Commitment Text Hash</label>
-          <input
-            value={form.commitmentTextHash}
-            onChange={(e) => onFieldChange("commitmentTextHash", e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="label">Deadline TS</label>
-          <input value={form.deadlineTs} onChange={(e) => onFieldChange("deadlineTs", e.target.value)} />
-        </div>
-        <div>
-          <label className="label">Verification Rule</label>
-          <input value={form.verificationRule} onChange={(e) => onFieldChange("verificationRule", e.target.value)} />
-        </div>
-        <button className="btn-primary" disabled={loading} onClick={onRegister}>{loading ? "Running..." : "Register Commitment"}</button>
 
-        <div>
-          <label className="label">Evaluate Result</label>
-          <select value={form.result} onChange={(e) => onFieldChange("result", e.target.value)}>
-            <option value="fulfilled">fulfilled</option>
-            <option value="partial">partial</option>
-            <option value="missed">missed</option>
-          </select>
-        </div>
-        <div>
-          <label className="label">Evidence Hash</label>
-          <input value={form.evidenceHash} onChange={(e) => onFieldChange("evidenceHash", e.target.value)} />
-        </div>
-        <button className="btn-secondary" disabled={loading} onClick={onEvaluate}>{loading ? "Running..." : "Evaluate Commitment"}</button>
-        <button className="btn-secondary" disabled={loading} onClick={onSubmitEvidence}>
-          {loading ? "Running..." : "Submit Grace Evidence"}
-        </button>
-        <button className="btn-secondary" disabled={loading} onClick={onFinalize}>{loading ? "Running..." : "Finalize Commitment"}</button>
+        <Button onClick={onRegister} disabled={loading}>
+          {loading ? "Running..." : "Register Commitment"}
+        </Button>
 
-        {error ? <p className="error-text">{error}</p> : null}
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Evaluate Result</Label>
+            <Select value={form.result} onValueChange={(value) => onFieldChange("result", value)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="fulfilled">fulfilled</SelectItem>
+                <SelectItem value="partial">partial</SelectItem>
+                <SelectItem value="missed">missed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Evidence Hash</Label>
+            <Input value={form.evidenceHash} onChange={(e) => onFieldChange("evidenceHash", e.target.value)} />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={onEvaluate} disabled={loading}>
+            {loading ? "Running..." : "Evaluate Commitment"}
+          </Button>
+          <Button variant="outline" onClick={onSubmitEvidence} disabled={loading}>
+            {loading ? "Running..." : "Submit Grace Evidence"}
+          </Button>
+          <Button variant="outline" onClick={onFinalize} disabled={loading}>
+            {loading ? "Running..." : "Finalize Commitment"}
+          </Button>
+        </div>
+
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
         {log.length > 0 ? (
-          <div>
-            <label className="label">Commitment Log</label>
-            <div className="grid">
+          <div className="space-y-2">
+            <Label>Commitment Log</Label>
+            <div className="space-y-2">
               {log.map((line, idx) => (
-                <div key={`${line}-${idx}`} className="kpi muted" style={{ fontSize: 12 }}>
+                <div key={`${line}-${idx}`} className="rounded-md border border-border/70 bg-muted/20 px-3 py-2 font-mono text-xs text-muted-foreground">
                   {line}
                 </div>
               ))}
             </div>
           </div>
         ) : null}
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
+

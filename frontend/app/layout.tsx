@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { AppWagmiProvider } from "../src/providers/wagmi-provider";
 
 export const metadata: Metadata = {
-  title: "CertLayer",
+  title: "CERTLAYER",
   description: "Trustless event verification and automated enforcement for web3 infrastructure.",
 };
 
