@@ -2,10 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
+import { injected } from "wagmi/connectors";
 import { CommitmentsSection } from "../src/components/dashboard/CommitmentsSection";
 import { IncidentLifecycleSection } from "../src/components/dashboard/IncidentLifecycleSection";
 import { ProtocolRegistrationSection } from "../src/components/dashboard/ProtocolRegistrationSection";
 import { SecurityRecoverySection } from "../src/components/dashboard/SecurityRecoverySection";
+import { UptimeChart } from "../src/components/dashboard/UptimeChart";
 import {
   AuthSession,
   CommitmentForm,
@@ -71,6 +76,11 @@ const initialSecurityForm: SecurityForm = {
 };
 
 export default function HomePage() {
+  const { address, isConnected } = useAccount();
+  const { connectAsync, isPending: isConnecting } = useConnect();
+  const { disconnect } = useDisconnect();
+  const { signMessageAsync } = useSignMessage();
+
   const [mode, setMode] = useState<Mode>("wallet");
   const [view, setView] = useState<View>("landing");
   const [loadingAuth, setLoadingAuth] = useState(false);
@@ -153,11 +163,13 @@ export default function HomePage() {
     setAuthError("");
     setLoadingAuth(true);
     try {
-      const ethereum = (window as { ethereum?: { request: (arg: unknown) => Promise<unknown> } }).ethereum;
-      if (!ethereum) throw new Error("MetaMask is not installed");
+      let wallet = address as string | undefined;
 
-      const accounts = (await ethereum.request({ method: "eth_requestAccounts" })) as string[];
-      const wallet = accounts[0];
+      if (!wallet) {
+        const connected = await connectAsync({ connector: injected() });
+        wallet = connected.accounts?.[0];
+      }
+
       if (!wallet) throw new Error("No wallet selected");
 
       const nonceRes = await postJson("/v1/auth/wallet/nonce", { wallet });
@@ -167,10 +179,9 @@ export default function HomePage() {
       }
       const nonceData = await nonceRes.json();
 
-      const signature = (await ethereum.request({
-        method: "personal_sign",
-        params: [nonceData.message, wallet],
-      })) as string;
+      const signature = await signMessageAsync({
+        message: nonceData.message,
+      });
 
       const verifyRes = await postJson("/v1/auth/wallet/verify", { wallet, signature });
       if (!verifyRes.ok) {
@@ -195,6 +206,7 @@ export default function HomePage() {
   }
 
   function signOut() {
+    if (isConnected) disconnect();
     localStorage.removeItem("certlayer_session_token");
     setSession(null);
     setView("landing");
@@ -369,6 +381,14 @@ export default function HomePage() {
         <section className="card">
           <h3 className="surface-title">Next modules</h3>
           <p className="hero-copy">Incidents, Coverage Pool, Reputation Breakdown, API Access, Team Roles.</p>
+        </section>
+
+        <section className="card">
+          <h3 className="surface-title">Uptime Trend (90d)</h3>
+          <p className="hero-copy" style={{ marginBottom: 12 }}>
+            Reliability trend preview for internal operations.
+          </p>
+          <UptimeChart />
         </section>
 
         <ProtocolRegistrationSection
@@ -605,14 +625,20 @@ export default function HomePage() {
             <span className="status-chip chip-neutral">Read-only Preview</span>
           </div>
         </section>
-        <section className="card">
-          <h3 className="surface-title">Key Management</h3>
-          <p className="hero-copy">Generate, rotate, and revoke keys. Monitor usage and billing.</p>
-          <div className="btn-row" style={{ marginTop: 12 }}>
-            <button className="btn-secondary" onClick={() => setView("landing")}>Back</button>
-            <button className="btn-primary" onClick={signOut}>Sign Out</button>
-          </div>
-        </section>
+        <Card className="border-white/10 bg-[var(--bg-2)] text-[var(--text)] shadow-[0_10px_30px_rgba(0,0,0,0.32)]">
+          <CardHeader className="pb-3">
+            <CardTitle className="surface-title">Key Management</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="hero-copy">Generate, rotate, and revoke keys. Monitor usage and billing.</p>
+            <div className="btn-row" style={{ marginTop: 12 }}>
+              <Button variant="outline" onClick={() => setView("landing")}>
+                Back
+              </Button>
+              <Button onClick={signOut}>Sign Out</Button>
+            </div>
+          </CardContent>
+        </Card>
       </main>
     );
   }
@@ -656,11 +682,20 @@ export default function HomePage() {
           {mode === "wallet" ? (
             <div className="grid">
               <button className="btn-primary" onClick={signInWithMetaMask} disabled={loadingAuth}>
-                {loadingAuth ? "Signing in..." : "Connect + Sign (MetaMask)"}
+                {loadingAuth || isConnecting
+                  ? "Signing in..."
+                  : isConnected
+                    ? "Sign In with Connected Wallet"
+                    : "Connect + Sign (MetaMask)"}
               </button>
               <p className="muted" style={{ fontSize: 12 }}>
                 Sign a nonce message to authenticate. No transaction required.
               </p>
+              {isConnected && address ? (
+                <p className="muted" style={{ fontSize: 12 }}>
+                  Connected wallet: <span className="mono">{address}</span>
+                </p>
+              ) : null}
               {authError ? <p className="error-text">{authError}</p> : null}
             </div>
           ) : (
