@@ -9,6 +9,8 @@ import { useAccount, useConnect, useSignMessage } from "wagmi";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -29,6 +31,8 @@ type CommitmentPreview = {
   protocolId: string;
   commitmentId: string;
   commitmentType: string;
+  amount?: number;
+  asset?: string;
   status: string;
   result: string;
   deadlineTs: number;
@@ -41,6 +45,7 @@ type ProtocolPreview = {
   website: string;
   protocolType: string;
   uptimeBps: number;
+  coveragePoolUsdc?: number;
   createdAt?: string;
 };
 
@@ -65,6 +70,8 @@ const initialCommitmentForm: CommitmentForm = {
   commitmentType: "governance",
   sourceUrl: "",
   commitmentTextHash: "",
+  amount: "",
+  asset: "USDC",
   deadlineTs: "",
   verificationRule: "",
   result: "fulfilled",
@@ -143,6 +150,10 @@ export default function DashboardPage() {
   const [commitmentItems, setCommitmentItems] = useState<CommitmentPreview[]>([]);
   const [commitmentsLoading, setCommitmentsLoading] = useState(false);
   const [commitmentsError, setCommitmentsError] = useState("");
+  const [poolDepositAmount, setPoolDepositAmount] = useState("");
+  const [poolDepositLoading, setPoolDepositLoading] = useState(false);
+  const [poolDepositError, setPoolDepositError] = useState("");
+  const [poolDepositSuccess, setPoolDepositSuccess] = useState("");
 
   const [lifecycleForm, setLifecycleForm] = useState<LifecycleForm>(initialLifecycleForm);
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
@@ -182,10 +193,11 @@ export default function DashboardPage() {
       meta: `Based on ${commitmentCount} commitment${commitmentCount === 1 ? "" : "s"}`,
     };
   }, [hasRegisteredProtocol, commitmentCount, commitmentItems]);
-  const coverageSummary = useMemo(
-    () => ({ value: "Empty", meta: "No funds yet" }),
-    []
-  );
+  const coverageSummary = useMemo(() => {
+    const value = Number(activeProtocol?.coveragePoolUsdc || 0);
+    if (value <= 0) return { value: "Empty", meta: "No funds yet" };
+    return { value: `${value.toLocaleString()} USDC`, meta: "Funded pool" };
+  }, [activeProtocol]);
   const compensationSummary = useMemo(
     () => ({
       value: "0 USDC",
@@ -231,6 +243,7 @@ export default function DashboardPage() {
             website: item.website || "",
             protocolType: item.protocolType || "",
             uptimeBps: Number(item.uptimeBps || 0),
+            coveragePoolUsdc: Number(item.coveragePoolUsdc || 0),
             createdAt: item.createdAt || "",
           }));
           setProtocolOptions(mapped);
@@ -242,6 +255,7 @@ export default function DashboardPage() {
             website: first.website || "",
             protocolType: first.protocolType || "",
             uptimeBps: Number(first.uptimeBps || 0),
+            coveragePoolUsdc: Number(first.coveragePoolUsdc || 0),
             createdAt: first.createdAt || "",
           });
         }
@@ -342,6 +356,7 @@ export default function DashboardPage() {
         website: data.protocol.website || "",
         protocolType: data.protocol.protocolType || "",
         uptimeBps: Number(data.protocol.uptimeBps || 0),
+        coveragePoolUsdc: Number(data.protocol.coveragePoolUsdc || 0),
         createdAt: data.protocol.createdAt || new Date().toISOString(),
       };
       setActiveProtocol(createdProtocol);
@@ -463,6 +478,40 @@ export default function DashboardPage() {
       setSecurityError(e instanceof Error ? e.message : `${label} failed`);
     } finally {
       setSecurityLoading(false);
+    }
+  }
+
+  async function submitPoolDeposit() {
+    if (!session) return setPoolDepositError("Please sign in first.");
+    if (!activeProtocolId) return setPoolDepositError("Register/select a protocol first.");
+    const amount = Number(poolDepositAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return setPoolDepositError("Enter a valid amount greater than 0.");
+    }
+
+    setPoolDepositError("");
+    setPoolDepositSuccess("");
+    setPoolDepositLoading(true);
+    try {
+      const res = await postJson("/v1/pools/deposit", { protocolId: activeProtocolId, amount }, session.token);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Pool deposit failed");
+      const updatedPool = Number(data.protocol?.coveragePoolUsdc || 0);
+      setActiveProtocol((prev) => {
+        if (!prev) return prev;
+        return { ...prev, coveragePoolUsdc: updatedPool };
+      });
+      setProtocolOptions((prev) =>
+        prev.map((protocol) =>
+          protocol.id === activeProtocolId ? { ...protocol, coveragePoolUsdc: updatedPool } : protocol
+        )
+      );
+      setPoolDepositSuccess(`Pool funded: ${amount} USDC`);
+      setPoolDepositAmount("");
+    } catch (e) {
+      setPoolDepositError(e instanceof Error ? e.message : "Pool deposit failed");
+    } finally {
+      setPoolDepositLoading(false);
     }
   }
 
@@ -611,6 +660,35 @@ export default function DashboardPage() {
               />
             )}
 
+            {hasRegisteredProtocol ? (
+              <Card className="border-border/70 bg-card shadow-sm">
+                <CardHeader>
+                  <CardTitle>Compensation Pool</CardTitle>
+                  <CardDescription>Fund the pool used for compensation payouts.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Deposit Amount (USDC)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="any"
+                        placeholder="1000"
+                        value={poolDepositAmount}
+                        onChange={(e) => setPoolDepositAmount(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={submitPoolDeposit} disabled={poolDepositLoading}>
+                    {poolDepositLoading ? "Depositing..." : "Add to Compensation Pool"}
+                  </Button>
+                  {poolDepositSuccess ? <p className="text-sm text-emerald-400">{poolDepositSuccess}</p> : null}
+                  {poolDepositError ? <p className="text-sm text-destructive">{poolDepositError}</p> : null}
+                </CardContent>
+              </Card>
+            ) : null}
+
             <Card className="border-border/70 bg-card shadow-sm">
               <CardHeader>
                 <CardTitle>Protocol Commitments</CardTitle>
@@ -637,6 +715,7 @@ export default function DashboardPage() {
                         <p className="text-xs text-muted-foreground">
                           Status: {item.status}
                           {item.result ? ` • Result: ${item.result}` : ""}
+                          {Number.isFinite(item.amount) ? ` • Amount: ${item.amount} ${item.asset || ""}` : ""}
                           {item.deadlineTs ? ` • Deadline: ${item.deadlineTs}` : ""}
                         </p>
                       </div>
@@ -779,6 +858,8 @@ export default function DashboardPage() {
                       commitmentType: commitmentForm.commitmentType,
                       sourceUrl: commitmentForm.sourceUrl,
                       commitmentTextHash: commitmentForm.commitmentTextHash,
+                      amount: commitmentForm.amount ? Number(commitmentForm.amount) : 0,
+                      asset: commitmentForm.asset || "USDC",
                       deadlineTs: Number(commitmentForm.deadlineTs),
                       verificationRule: commitmentForm.verificationRule,
                     },

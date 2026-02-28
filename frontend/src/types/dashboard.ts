@@ -35,6 +35,8 @@ export type CommitmentForm = {
   commitmentType: string;
   sourceUrl: string;
   commitmentTextHash: string;
+  amount: string;
+  asset: string;
   deadlineTs: string;
   verificationRule: string;
   result: string;

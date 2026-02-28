@@ -6,6 +6,7 @@ import { getAddress, recoverMessageAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   addIncident,
+  addProtocolPool,
   db,
   ensureProtocol,
   findProtocol,
@@ -705,6 +706,11 @@ const server = createServer(async (req, res) => {
       if (!body.protocolId || !body.commitmentId || !body.commitmentType || !body.deadlineTs) {
         return send(res, 400, { error: "protocolId, commitmentId, commitmentType, deadlineTs required" });
       }
+      const amount = Number(body.amount ?? 0);
+      if (!Number.isFinite(amount) || amount < 0) {
+        return send(res, 400, { error: "amount must be a valid non-negative number" });
+      }
+      const asset = typeof body.asset === "string" && body.asset.trim() ? body.asset.trim().toUpperCase() : "USDC";
       const authz = enforceProtocolOwnership(req, body.protocolId);
       if (!authz.ok) return send(res, authz.status, { error: authz.error });
 
@@ -714,6 +720,8 @@ const server = createServer(async (req, res) => {
         commitmentType: body.commitmentType,
         sourceUrl: body.sourceUrl || "",
         commitmentTextHash: body.commitmentTextHash || "",
+        amount,
+        asset,
         deadlineTs: Number(body.deadlineTs),
         verificationRule: body.verificationRule || "",
         status: "registered",
@@ -846,15 +854,21 @@ const server = createServer(async (req, res) => {
       if (!body.protocolId || body.amount === undefined) {
         return send(res, 400, { error: "protocolId and amount required" });
       }
+      const amount = Number(body.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return send(res, 400, { error: "amount must be a valid number greater than 0" });
+      }
       const authz = enforceProtocolOwnership(req, body.protocolId);
       if (!authz.ok) return send(res, authz.status, { error: authz.error });
 
       if (LIVE_MODE) {
-        const onchain = await contractWrite("deposit", [body.protocolId, Number(body.amount)]);
-        return send(res, 200, { ok: true, onchain });
+        const onchain = await contractWrite("deposit", [body.protocolId, amount]);
+        const protocol = addProtocolPool(body.protocolId, amount);
+        return send(res, 200, { ok: true, protocol, onchain });
       }
 
-      return send(res, 200, { ok: true, mode: "local" });
+      const protocol = addProtocolPool(body.protocolId, amount);
+      return send(res, 200, { ok: true, protocol, mode: "local" });
     }
 
     if (req.method === "POST" && pathname === "/v1/enforcement/execute") {

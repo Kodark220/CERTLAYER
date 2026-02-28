@@ -119,6 +119,25 @@ export function CommitmentsSection({
             <Input value={form.commitmentTextHash} onChange={(e) => onFieldChange("commitmentTextHash", e.target.value)} />
           </div>
           <div className="space-y-2">
+            <Label>Amount</Label>
+            <Input
+              type="number"
+              min="0"
+              step="any"
+              placeholder="1000"
+              value={form.amount}
+              onChange={(e) => onFieldChange("amount", e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Asset</Label>
+            <Input
+              placeholder="USDC"
+              value={form.asset}
+              onChange={(e) => onFieldChange("asset", e.target.value.toUpperCase())}
+            />
+          </div>
+          <div className="space-y-2">
             <Label>Deadline TS</Label>
             <Input value={form.deadlineTs} onChange={(e) => onFieldChange("deadlineTs", e.target.value)} />
           </div>

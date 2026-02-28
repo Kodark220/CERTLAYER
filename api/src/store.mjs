@@ -13,11 +13,20 @@ export function ensureProtocol(payload) {
     website: payload.website || "",
     protocolType: payload.protocolType || "other",
     uptimeBps: Number(payload.uptimeBps || 9990),
+    coveragePoolUsdc: Number(payload.coveragePoolUsdc || 0),
     ownerWallet,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
   db.protocols.push(protocol);
+  return protocol;
+}
+
+export function addProtocolPool(protocolId, amount) {
+  const protocol = findProtocol(protocolId);
+  if (!protocol) return null;
+  protocol.coveragePoolUsdc = Number(protocol.coveragePoolUsdc || 0) + Number(amount || 0);
+  protocol.updatedAt = new Date().toISOString();
   return protocol;
 }
 
@@ -83,6 +92,8 @@ export function upsertCommitment(payload) {
     if (payload.commitmentType !== undefined) existing.commitmentType = payload.commitmentType;
     if (payload.sourceUrl !== undefined) existing.sourceUrl = payload.sourceUrl;
     if (payload.commitmentTextHash !== undefined) existing.commitmentTextHash = payload.commitmentTextHash;
+    if (payload.amount !== undefined) existing.amount = Number(payload.amount);
+    if (payload.asset !== undefined) existing.asset = payload.asset;
     if (payload.deadlineTs !== undefined) existing.deadlineTs = Number(payload.deadlineTs);
     if (payload.verificationRule !== undefined) existing.verificationRule = payload.verificationRule;
     if (payload.result !== undefined) existing.result = payload.result;
@@ -98,6 +109,8 @@ export function upsertCommitment(payload) {
     commitmentType: payload.commitmentType || "other",
     sourceUrl: payload.sourceUrl || "",
     commitmentTextHash: payload.commitmentTextHash || "",
+    amount: Number(payload.amount || 0),
+    asset: payload.asset || "USDC",
     deadlineTs: Number(payload.deadlineTs || 0),
     verificationRule: payload.verificationRule || "",
     result: payload.result || "",
