@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { injected } from "wagmi/connectors";
 import { useDisconnect } from "wagmi";
+import { useAccount, useConnect, useSignMessage } from "wagmi";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -94,6 +96,9 @@ async function postJson(path: string, body: Record<string, unknown>, token?: str
 
 export default function DashboardPage() {
   const { disconnect } = useDisconnect();
+  const { address } = useAccount();
+  const { connectAsync } = useConnect();
+  const { signMessageAsync } = useSignMessage();
 
   const [session, setSession] = useState<AuthSession | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
@@ -101,6 +106,7 @@ export default function DashboardPage() {
 
   const [registerForm, setRegisterForm] = useState<RegisterForm>(initialRegisterForm);
   const [registerLoading, setRegisterLoading] = useState(false);
+  const [walletConfirmLoading, setWalletConfirmLoading] = useState(false);
   const [registerError, setRegisterError] = useState("");
   const [registerSuccess, setRegisterSuccess] = useState("");
   const [registerTxHash, setRegisterTxHash] = useState("");
@@ -198,6 +204,37 @@ export default function DashboardPage() {
       setRegisterError(e instanceof Error ? e.message : "Registration failed");
     } finally {
       setRegisterLoading(false);
+    }
+  }
+
+  async function submitProtocolRegistrationWithWalletConfirm() {
+    if (!session) return setRegisterError("Please sign in first.");
+    setRegisterError("");
+    setWalletConfirmLoading(true);
+    try {
+      let wallet = address as string | undefined;
+      if (!wallet) {
+        const connected = await connectAsync({ connector: injected() });
+        wallet = connected.accounts?.[0];
+      }
+      if (!wallet) throw new Error("No wallet selected");
+
+      const confirmationMessage = [
+        "CertLayer Registration Confirmation",
+        `Wallet: ${wallet}`,
+        `Protocol: ${registerForm.name || "(unnamed)"}`,
+        `Website: ${registerForm.website || "(none)"}`,
+        `Type: ${registerForm.protocolType}`,
+        `Uptime BPS: ${registerForm.uptimeBps}`,
+        `Timestamp: ${new Date().toISOString()}`,
+      ].join("\n");
+
+      await signMessageAsync({ message: confirmationMessage });
+      await submitProtocolRegistration();
+    } catch (e) {
+      setRegisterError(e instanceof Error ? e.message : "Wallet confirmation failed");
+    } finally {
+      setWalletConfirmLoading(false);
     }
   }
 
@@ -356,7 +393,9 @@ export default function DashboardPage() {
             form={registerForm}
             onFieldChange={setRegisterField}
             onSubmit={submitProtocolRegistration}
+            onSubmitWithWalletConfirm={submitProtocolRegistrationWithWalletConfirm}
             loading={registerLoading}
+            walletConfirmLoading={walletConfirmLoading}
             success={registerSuccess}
             txHash={registerTxHash}
             error={registerError}

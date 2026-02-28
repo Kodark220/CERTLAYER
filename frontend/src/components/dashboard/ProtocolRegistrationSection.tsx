@@ -11,7 +11,9 @@ type Props = {
   form: RegisterForm;
   onFieldChange: (field: keyof RegisterForm, value: string) => void;
   onSubmit: () => void;
+  onSubmitWithWalletConfirm: () => void;
   loading: boolean;
+  walletConfirmLoading: boolean;
   success: string;
   txHash: string;
   error: string;
@@ -24,7 +26,9 @@ export function ProtocolRegistrationSection({
   form,
   onFieldChange,
   onSubmit,
+  onSubmitWithWalletConfirm,
   loading,
+  walletConfirmLoading,
   success,
   txHash,
   error,
@@ -83,9 +87,14 @@ export function ProtocolRegistrationSection({
             </div>
           ) : null}
         </div>
-        <Button onClick={onSubmit} disabled={loading}>
-          {loading ? "Submitting..." : "Register Protocol"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={onSubmit} disabled={loading || walletConfirmLoading}>
+            {loading ? "Submitting..." : "Register Protocol"}
+          </Button>
+          <Button variant="outline" onClick={onSubmitWithWalletConfirm} disabled={loading || walletConfirmLoading}>
+            {walletConfirmLoading ? "Confirming..." : "Register Protocol (Confirm in Wallet)"}
+          </Button>
+        </div>
         {success ? <p className="text-sm text-emerald-400">{success}</p> : null}
         {txHash ? <p className="break-all font-mono text-xs text-muted-foreground">Tx Hash: {txHash}</p> : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
