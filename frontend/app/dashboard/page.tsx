@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDisconnect } from "wagmi";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { CommitmentsSection } from "@/src/components/dashboard/CommitmentsSection";
 import { IncidentLifecycleSection } from "@/src/components/dashboard/IncidentLifecycleSection";
 import { ProtocolRegistrationSection } from "@/src/components/dashboard/ProtocolRegistrationSection";
@@ -13,18 +16,13 @@ import { SecurityRecoverySection } from "@/src/components/dashboard/SecurityReco
 import { UptimeChart } from "@/src/components/dashboard/UptimeChart";
 import { PageHeader } from "@/src/components/layout/PageHeader";
 import { PageShell } from "@/src/components/layout/PageShell";
-import { AuthSession, CommitmentForm, LifecycleForm, RegisterForm, SecurityForm, View } from "@/src/types/dashboard";
+
+import type { AuthSession, CommitmentForm, LifecycleForm, RegisterForm, SecurityForm } from "@/src/types/dashboard";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 const PUBLIC_API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
-const initialRegisterForm: RegisterForm = {
-  id: "",
-  name: "",
-  website: "",
-  protocolType: "rpc",
-  uptimeBps: "9990",
-};
+const initialRegisterForm: RegisterForm = { id: "", name: "", website: "", protocolType: "rpc", uptimeBps: "9990" };
 
 const initialLifecycleForm: LifecycleForm = {
   incidentId: "",
@@ -69,15 +67,15 @@ const initialSecurityForm: SecurityForm = {
   recoveryEffort: "0",
 };
 
-function MetricCard({ label, value, meta, primary = false }: { label: string; value: string; meta?: string; primary?: boolean }) {
+function MetricCard({ label, value, meta }: { label: string; value: string; meta?: string }) {
   return (
-    <Card className={`border-border/70 bg-card shadow-sm ${primary ? "md:col-span-2" : ""}`}>
+    <Card className="border-border/70 bg-card shadow-sm">
       <CardHeader className="space-y-2">
         <CardDescription>{label}</CardDescription>
         <CardTitle className="text-3xl font-semibold tracking-tight">{value}</CardTitle>
         {meta ? (
           <div>
-            <Badge variant="secondary" className="border border-border/80 bg-secondary/40 text-xs">
+            <Badge variant="secondary" className="text-xs">
               {meta}
             </Badge>
           </div>
@@ -87,12 +85,19 @@ function MetricCard({ label, value, meta, primary = false }: { label: string; va
   );
 }
 
+async function postJson(path: string, body: Record<string, unknown>, token?: string) {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (PUBLIC_API_KEY) headers["x-api-key"] = PUBLIC_API_KEY;
+  return fetch(`${API_BASE_URL}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+}
+
 export default function DashboardPage() {
   const { disconnect } = useDisconnect();
 
-  const [view, setView] = useState<View>("protocol");
   const [session, setSession] = useState<AuthSession | null>(null);
   const [sessionReady, setSessionReady] = useState(false);
+  const [tab, setTab] = useState<"protocol" | "incidents" | "commitments" | "security">("protocol");
 
   const [registerForm, setRegisterForm] = useState<RegisterForm>(initialRegisterForm);
   const [registerLoading, setRegisterLoading] = useState(false);
@@ -116,7 +121,7 @@ export default function DashboardPage() {
   const [securityError, setSecurityError] = useState("");
   const [securityLog, setSecurityLog] = useState<string[]>([]);
 
-  const canSeeInternalControls = session?.role === "admin";
+  const canSeeInternalControls = useMemo(() => session?.role === "admin", [session]);
 
   useEffect(() => {
     const saved = localStorage.getItem("certlayer_session_token");
@@ -125,24 +130,27 @@ export default function DashboardPage() {
       return;
     }
 
-    fetch(`${API_BASE_URL}/v1/auth/me`, {
-      headers: { Authorization: `Bearer ${saved}` },
-    })
+    fetch(`${API_BASE_URL}/v1/auth/me`, { headers: { Authorization: `Bearer ${saved}` } })
       .then(async (r) => {
         if (!r.ok) throw new Error("Session expired");
         const me = await r.json();
-        setSession({
-          token: saved,
-          wallet: me.wallet,
-          role: me.role,
-          expiresAt: me.expiresAt,
-        });
+        setSession({ token: saved, wallet: me.wallet, role: me.role, expiresAt: me.expiresAt });
       })
-      .catch(() => {
-        localStorage.removeItem("certlayer_session_token");
-      })
+      .catch(() => localStorage.removeItem("certlayer_session_token"))
       .finally(() => setSessionReady(true));
   }, []);
+
+  useEffect(() => {
+    if (!canSeeInternalControls && tab !== "protocol") {
+      setTab("protocol");
+    }
+  }, [canSeeInternalControls, tab]);
+
+  function signOut() {
+    disconnect();
+    localStorage.removeItem("certlayer_session_token");
+    setSession(null);
+  }
 
   function setRegisterField(field: keyof RegisterForm, value: string) {
     setRegisterForm((prev) => ({ ...prev, [field]: value }));
@@ -160,30 +168,13 @@ export default function DashboardPage() {
     setSecurityForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  async function postJson(path: string, body: Record<string, unknown>, token?: string) {
-    const headers: Record<string, string> = {
-      "content-type": "application/json",
-    };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    if (PUBLIC_API_KEY) headers["x-api-key"] = PUBLIC_API_KEY;
-    return fetch(`${API_BASE_URL}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
-  }
-
-  function signOut() {
-    disconnect();
-    localStorage.removeItem("certlayer_session_token");
-    setSession(null);
-  }
-
   async function submitProtocolRegistration() {
-    if (!session) {
-      setRegisterError("Please sign in first.");
-      return;
-    }
+    if (!session) return setRegisterError("Please sign in first.");
     setRegisterError("");
     setRegisterSuccess("");
     setRegisterTxHash("");
     setRegisterLoading(true);
+
     try {
       const res = await postJson(
         "/v1/protocols/register",
@@ -202,25 +193,21 @@ export default function DashboardPage() {
       setActiveProtocolId(data.protocol.id);
       setRegisterTxHash(data.onchain?.txHash || "");
       setRegisterForm((prev) => ({ ...prev, id: "" }));
-    } catch (error) {
-      setRegisterError(error instanceof Error ? error.message : "Registration failed");
+    } catch (e) {
+      setRegisterError(e instanceof Error ? e.message : "Registration failed");
     } finally {
       setRegisterLoading(false);
     }
   }
 
   async function runLifecycleAction(path: string, payload: Record<string, unknown>, label: string) {
-    if (!session) {
-      setLifecycleError("Please sign in first.");
-      return;
-    }
+    if (!session) return setLifecycleError("Please sign in first.");
     const protocolId = activeProtocolId.trim();
-    if (!protocolId) {
-      setLifecycleError("Set or register a Protocol ID first.");
-      return;
-    }
+    if (!protocolId) return setLifecycleError("Set or register a Protocol ID first.");
+
     setLifecycleError("");
     setLifecycleLoading(true);
+
     try {
       const res = await postJson(path, { ...payload, protocolId }, session.token);
       const data = await res.json();
@@ -230,50 +217,42 @@ export default function DashboardPage() {
       if (path === "/v1/incidents/create-lifecycle" && data.incidentId) {
         setLifecycleField("incidentId", data.incidentId);
       }
-    } catch (error) {
-      setLifecycleError(error instanceof Error ? error.message : `${label} failed`);
+    } catch (e) {
+      setLifecycleError(e instanceof Error ? e.message : `${label} failed`);
     } finally {
       setLifecycleLoading(false);
     }
   }
 
   async function runCommitmentAction(path: string, payload: Record<string, unknown>, label: string) {
-    if (!session || !canSeeInternalControls) {
-      setCommitmentError("Admin session required.");
-      return;
-    }
+    if (!session || !canSeeInternalControls) return setCommitmentError("Admin session required.");
     const protocolId = activeProtocolId.trim();
-    if (!protocolId) {
-      setCommitmentError("Set Active Protocol ID first.");
-      return;
-    }
+    if (!protocolId) return setCommitmentError("Set Active Protocol ID first.");
+
     setCommitmentError("");
     setCommitmentLoading(true);
+
     try {
       const res = await postJson(path, { ...payload, protocolId }, session.token);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `${label} failed`);
       const tx = data.onchain?.txHash ? ` tx=${data.onchain.txHash}` : "";
       setCommitmentLog((prev) => [`${label} success${tx}`, ...prev].slice(0, 20));
-    } catch (error) {
-      setCommitmentError(error instanceof Error ? error.message : `${label} failed`);
+    } catch (e) {
+      setCommitmentError(e instanceof Error ? e.message : `${label} failed`);
     } finally {
       setCommitmentLoading(false);
     }
   }
 
   async function runSecurityAction(path: string, payload: Record<string, unknown>, label: string) {
-    if (!session || !canSeeInternalControls) {
-      setSecurityError("Admin session required.");
-      return;
-    }
+    if (!session || !canSeeInternalControls) return setSecurityError("Admin session required.");
     const protocolId = activeProtocolId.trim();
-    if (!protocolId) {
-      setSecurityError("Set Active Protocol ID first.");
-      return;
-    }
+    if (!protocolId) return setSecurityError("Set Active Protocol ID first.");
+
     setSecurityError("");
     setSecurityLoading(true);
+
     try {
       const res = await postJson(path, { ...payload, protocolId }, session.token);
       const data = await res.json();
@@ -283,8 +262,8 @@ export default function DashboardPage() {
       if (path === "/v1/security-incidents/create" && data.incidentId) {
         setSecurityField("incidentId", data.incidentId);
       }
-    } catch (error) {
-      setSecurityError(error instanceof Error ? error.message : `${label} failed`);
+    } catch (e) {
+      setSecurityError(e instanceof Error ? e.message : `${label} failed`);
     } finally {
       setSecurityLoading(false);
     }
@@ -293,7 +272,7 @@ export default function DashboardPage() {
   if (!sessionReady) {
     return (
       <PageShell>
-        <Card className="border-border/70 bg-card shadow-sm">
+        <Card>
           <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">Loading session...</p>
           </CardContent>
@@ -305,44 +284,18 @@ export default function DashboardPage() {
   if (!session) {
     return (
       <PageShell>
-        <Card className="border-border/70 bg-card shadow-sm">
+        <Card>
           <CardHeader>
             <CardTitle>Sign In Required</CardTitle>
-            <CardDescription>You need a wallet-authenticated session to access protocol registration.</CardDescription>
+            <CardDescription>You need a wallet-authenticated session to access the dashboard.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex gap-2">
             <Button asChild>
               <Link href="/signin">Go to Sign In</Link>
             </Button>
-          </CardContent>
-        </Card>
-      </PageShell>
-    );
-  }
-
-  if (view === "api") {
-    return (
-      <PageShell>
-        <PageHeader
-          title="API Portal"
-          description="For funds, analysts, and partners buying reputation data."
-          status="Read-only Preview"
-        />
-        <Card className="border-border/70 bg-card shadow-sm">
-          <CardHeader>
-            <CardTitle>Key Management</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">Generate, rotate, and revoke keys. Monitor usage and billing.</p>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => setView("protocol")}>
-                Open Protocol Dashboard
-              </Button>
-              <Button asChild variant="outline">
-                <Link href="/">Back Home</Link>
-              </Button>
-              <Button onClick={signOut}>Sign Out</Button>
-            </div>
+            <Button asChild variant="outline">
+              <Link href="/">Back Home</Link>
+            </Button>
           </CardContent>
         </Card>
       </PageShell>
@@ -356,29 +309,28 @@ export default function DashboardPage() {
         description="Private operational view for protocol teams."
         status="Live Monitoring"
         meta={
-          <p className="text-sm text-muted-foreground">
-            Signed in: <span className="font-mono">{session.wallet}</span> ({session.role})
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-muted-foreground">
+              Signed in: <span className="font-mono">{session.wallet}</span> ({session.role})
+            </p>
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/">Home</Link>
+            </Button>
+            <Button size="sm" onClick={signOut}>
+              Sign Out
+            </Button>
+          </div>
         }
       />
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <MetricCard label="Reputation Score" value="78.4 (A)" meta="Updated 2 min ago" primary />
-        <div className="grid gap-4 md:col-span-1">
-          <MetricCard label="Coverage Pool" value="245,000 USDC" />
-          <MetricCard label="30d Uptime" value="99.82% ↑" />
-          <MetricCard label="Compensation Paid" value="12,430 USDC" />
-        </div>
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <MetricCard label="Reputation Score" value="78.4 (A)" meta="Updated 2 min ago" />
+        <MetricCard label="Coverage Pool" value="245,000 USDC" />
+        <MetricCard label="30d Uptime" value="99.82% ↑" />
+        <MetricCard label="Compensation Paid" value="12,430 USDC" />
       </section>
 
-      <Card className="border-border/70 bg-card shadow-sm">
-        <CardHeader>
-          <CardTitle>Next modules</CardTitle>
-          <CardDescription>Incidents, Coverage Pool, Reputation Breakdown, API Access, Team Roles.</CardDescription>
-        </CardHeader>
-      </Card>
-
-      <Card className="border-border/70 bg-card shadow-sm">
+      <Card>
         <CardHeader>
           <CardTitle>Uptime Trend (90d)</CardTitle>
           <CardDescription>Reliability trend preview for internal operations.</CardDescription>
@@ -388,219 +340,244 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <ProtocolRegistrationSection
-        form={registerForm}
-        onFieldChange={setRegisterField}
-        onSubmit={submitProtocolRegistration}
-        loading={registerLoading}
-        success={registerSuccess}
-        txHash={registerTxHash}
-        error={registerError}
-        canSeeInternalControls={canSeeInternalControls}
-        activeProtocolId={activeProtocolId}
-        onActiveProtocolIdChange={setActiveProtocolId}
-      />
+      <div className="my-1 h-px bg-border/70" />
 
-      {canSeeInternalControls ? (
-        <IncidentLifecycleSection
-          form={lifecycleForm}
-          onFieldChange={setLifecycleField}
-          loading={lifecycleLoading}
-          error={lifecycleError}
-          log={lifecycleLog}
-          onCreateIncident={() =>
-            runLifecycleAction(
-              "/v1/incidents/create-lifecycle",
-              {
-                incidentId: lifecycleForm.incidentId || undefined,
-                startTs: lifecycleForm.startTs ? Number(lifecycleForm.startTs) : undefined,
-                evidenceHash: lifecycleForm.evidenceHash,
-              },
-              "Create incident"
-            )
-          }
-          onAttachAffectedUsers={() =>
-            runLifecycleAction(
-              "/v1/incidents/affected-users",
-              {
-                incidentId: lifecycleForm.incidentId,
-                walletsCsv: lifecycleForm.walletsCsv,
-                amountsCsv: lifecycleForm.amountsCsv,
-              },
-              "Attach affected users"
-            )
-          }
-          onOpenChallenge={() =>
-            runLifecycleAction(
-              "/v1/incidents/challenge/open",
-              {
-                incidentId: lifecycleForm.incidentId,
-                challengeEndsTs: Number(lifecycleForm.challengeEndsTs),
-              },
-              "Open challenge window"
-            )
-          }
-          onRaiseDispute={() =>
-            runLifecycleAction(
-              "/v1/incidents/dispute",
-              {
-                incidentId: lifecycleForm.incidentId,
-                wallet: lifecycleForm.disputeWallet,
-                evidenceHash: lifecycleForm.disputeEvidenceHash,
-              },
-              "Raise dispute"
-            )
-          }
-          onResolveDispute={() =>
-            runLifecycleAction(
-              "/v1/incidents/dispute/resolve",
-              {
-                incidentId: lifecycleForm.incidentId,
-                wallet: lifecycleForm.disputeWallet,
-                decision: lifecycleForm.disputeDecision,
-              },
-              "Resolve dispute"
-            )
-          }
-          onFinalizeIncident={() =>
-            runLifecycleAction("/v1/incidents/finalize", { incidentId: lifecycleForm.incidentId }, "Finalize incident")
-          }
-          onExecutePayoutBatch={() =>
-            runLifecycleAction(
-              "/v1/incidents/payout-batch",
-              {
-                incidentId: lifecycleForm.incidentId,
-                startIndex: Number(lifecycleForm.payoutStartIndex || 0),
-                limit: Number(lifecycleForm.payoutLimit || 20),
-              },
-              "Execute payout batch"
-            )
-          }
-        />
-      ) : null}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "protocol" | "incidents" | "commitments" | "security")} className="w-full">
+        <TabsList className="flex h-auto flex-wrap justify-start">
+          <TabsTrigger value="protocol">Register Protocol</TabsTrigger>
+          <TabsTrigger value="incidents" disabled={!canSeeInternalControls}>
+            Incident Lifecycle
+          </TabsTrigger>
+          <TabsTrigger value="commitments" disabled={!canSeeInternalControls}>
+            Commitments
+          </TabsTrigger>
+          <TabsTrigger value="security" disabled={!canSeeInternalControls}>
+            Security & Recovery
+          </TabsTrigger>
+        </TabsList>
 
-      {canSeeInternalControls ? (
-        <CommitmentsSection
-          form={commitmentForm}
-          onFieldChange={setCommitmentField}
-          loading={commitmentLoading}
-          error={commitmentError}
-          log={commitmentLog}
-          onRegister={() =>
-            runCommitmentAction(
-              "/v1/commitments/register",
-              {
-                commitmentId: commitmentForm.commitmentId,
-                commitmentType: commitmentForm.commitmentType,
-                sourceUrl: commitmentForm.sourceUrl,
-                commitmentTextHash: commitmentForm.commitmentTextHash,
-                deadlineTs: Number(commitmentForm.deadlineTs),
-                verificationRule: commitmentForm.verificationRule,
-              },
-              "Register commitment"
-            )
-          }
-          onEvaluate={() =>
-            runCommitmentAction(
-              "/v1/commitments/evaluate",
-              {
-                commitmentId: commitmentForm.commitmentId,
-                result: commitmentForm.result,
-                evidenceHash: commitmentForm.evidenceHash,
-              },
-              "Evaluate commitment"
-            )
-          }
-          onSubmitEvidence={() =>
-            runCommitmentAction(
-              "/v1/commitments/evidence",
-              {
-                commitmentId: commitmentForm.commitmentId,
-                evidenceHash: commitmentForm.evidenceHash,
-              },
-              "Submit fulfillment evidence"
-            )
-          }
-          onFinalize={() =>
-            runCommitmentAction("/v1/commitments/finalize", { commitmentId: commitmentForm.commitmentId }, "Finalize commitment")
-          }
-        />
-      ) : null}
+        <TabsContent value="protocol" className="mt-4">
+          <ProtocolRegistrationSection
+            form={registerForm}
+            onFieldChange={setRegisterField}
+            onSubmit={submitProtocolRegistration}
+            loading={registerLoading}
+            success={registerSuccess}
+            txHash={registerTxHash}
+            error={registerError}
+            canSeeInternalControls={canSeeInternalControls}
+            activeProtocolId={activeProtocolId}
+            onActiveProtocolIdChange={setActiveProtocolId}
+          />
+        </TabsContent>
 
-      {canSeeInternalControls ? (
-        <SecurityRecoverySection
-          form={securityForm}
-          onFieldChange={setSecurityField}
-          loading={securityLoading}
-          error={securityError}
-          log={securityLog}
-          onCreateSecurityIncident={() =>
-            runSecurityAction(
-              "/v1/security-incidents/create",
-              {
-                incidentId: securityForm.incidentId || undefined,
-                startTs: securityForm.startTs ? Number(securityForm.startTs) : undefined,
-                evidenceHash: securityForm.evidenceHash,
-                lastCleanBlock: Number(securityForm.lastCleanBlock || 0),
-                triggerSourcesCsv: securityForm.triggerSourcesCsv,
-              },
-              "Create security incident"
-            )
-          }
-          onAttachLossSnapshot={() =>
-            runSecurityAction(
-              "/v1/security-incidents/loss-snapshot",
-              {
-                incidentId: securityForm.incidentId,
-                walletsCsv: securityForm.walletsCsv,
-                lossesCsv: securityForm.lossesCsv,
-              },
-              "Attach loss snapshot"
-            )
-          }
-          onRecordRecovery={() =>
-            runSecurityAction(
-              "/v1/security-incidents/recovery/record",
-              {
-                incidentId: securityForm.incidentId,
-                amount: Number(securityForm.recoveryAmount || 0),
-              },
-              "Record recovery"
-            )
-          }
-          onDistributeRecoveryBatch={() =>
-            runSecurityAction(
-              "/v1/security-incidents/recovery/distribute",
-              {
-                incidentId: securityForm.incidentId,
-                startIndex: Number(securityForm.recoveryStartIndex || 0),
-                limit: Number(securityForm.recoveryLimit || 20),
-              },
-              "Distribute recovery batch"
-            )
-          }
-          onSetHackScores={() =>
-            runSecurityAction(
-              "/v1/security-incidents/response-score",
-              {
-                incidentId: securityForm.incidentId,
-                responseSpeed: Number(securityForm.responseSpeed || 0),
-                communicationQuality: Number(securityForm.communicationQuality || 0),
-                poolAdequacy: Number(securityForm.poolAdequacy || 0),
-                postMortemQuality: Number(securityForm.postMortemQuality || 0),
-                recoveryEffort: Number(securityForm.recoveryEffort || 0),
-              },
-              "Set hack response scores"
-            )
-          }
-        />
-      ) : null}
+        <TabsContent value="incidents" className="mt-4">
+          {canSeeInternalControls ? (
+            <IncidentLifecycleSection
+              form={lifecycleForm}
+              onFieldChange={setLifecycleField}
+              loading={lifecycleLoading}
+              error={lifecycleError}
+              log={lifecycleLog}
+              onCreateIncident={() =>
+                runLifecycleAction(
+                  "/v1/incidents/create-lifecycle",
+                  {
+                    incidentId: lifecycleForm.incidentId || undefined,
+                    startTs: lifecycleForm.startTs ? Number(lifecycleForm.startTs) : undefined,
+                    evidenceHash: lifecycleForm.evidenceHash,
+                  },
+                  "Create incident"
+                )
+              }
+              onAttachAffectedUsers={() =>
+                runLifecycleAction(
+                  "/v1/incidents/affected-users",
+                  {
+                    incidentId: lifecycleForm.incidentId,
+                    walletsCsv: lifecycleForm.walletsCsv,
+                    amountsCsv: lifecycleForm.amountsCsv,
+                  },
+                  "Attach affected users"
+                )
+              }
+              onOpenChallenge={() =>
+                runLifecycleAction(
+                  "/v1/incidents/challenge/open",
+                  {
+                    incidentId: lifecycleForm.incidentId,
+                    challengeEndsTs: Number(lifecycleForm.challengeEndsTs),
+                  },
+                  "Open challenge window"
+                )
+              }
+              onRaiseDispute={() =>
+                runLifecycleAction(
+                  "/v1/incidents/dispute",
+                  {
+                    incidentId: lifecycleForm.incidentId,
+                    wallet: lifecycleForm.disputeWallet,
+                    evidenceHash: lifecycleForm.disputeEvidenceHash,
+                  },
+                  "Raise dispute"
+                )
+              }
+              onResolveDispute={() =>
+                runLifecycleAction(
+                  "/v1/incidents/dispute/resolve",
+                  {
+                    incidentId: lifecycleForm.incidentId,
+                    wallet: lifecycleForm.disputeWallet,
+                    decision: lifecycleForm.disputeDecision,
+                  },
+                  "Resolve dispute"
+                )
+              }
+              onFinalizeIncident={() =>
+                runLifecycleAction("/v1/incidents/finalize", { incidentId: lifecycleForm.incidentId }, "Finalize incident")
+              }
+              onExecutePayoutBatch={() =>
+                runLifecycleAction(
+                  "/v1/incidents/payout-batch",
+                  {
+                    incidentId: lifecycleForm.incidentId,
+                    startIndex: Number(lifecycleForm.payoutStartIndex || 0),
+                    limit: Number(lifecycleForm.payoutLimit || 20),
+                  },
+                  "Execute payout batch"
+                )
+              }
+            />
+          ) : null}
+        </TabsContent>
 
-      <Card className="border-border/70 bg-card shadow-sm">
+        <TabsContent value="commitments" className="mt-4">
+          {canSeeInternalControls ? (
+            <CommitmentsSection
+              form={commitmentForm}
+              onFieldChange={setCommitmentField}
+              loading={commitmentLoading}
+              error={commitmentError}
+              log={commitmentLog}
+              onRegister={() =>
+                runCommitmentAction(
+                  "/v1/commitments/register",
+                  {
+                    commitmentId: commitmentForm.commitmentId,
+                    commitmentType: commitmentForm.commitmentType,
+                    sourceUrl: commitmentForm.sourceUrl,
+                    commitmentTextHash: commitmentForm.commitmentTextHash,
+                    deadlineTs: Number(commitmentForm.deadlineTs),
+                    verificationRule: commitmentForm.verificationRule,
+                  },
+                  "Register commitment"
+                )
+              }
+              onEvaluate={() =>
+                runCommitmentAction(
+                  "/v1/commitments/evaluate",
+                  {
+                    commitmentId: commitmentForm.commitmentId,
+                    result: commitmentForm.result,
+                    evidenceHash: commitmentForm.evidenceHash,
+                  },
+                  "Evaluate commitment"
+                )
+              }
+              onSubmitEvidence={() =>
+                runCommitmentAction(
+                  "/v1/commitments/evidence",
+                  {
+                    commitmentId: commitmentForm.commitmentId,
+                    evidenceHash: commitmentForm.evidenceHash,
+                  },
+                  "Submit fulfillment evidence"
+                )
+              }
+              onFinalize={() =>
+                runCommitmentAction("/v1/commitments/finalize", { commitmentId: commitmentForm.commitmentId }, "Finalize commitment")
+              }
+            />
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="security" className="mt-4">
+          {canSeeInternalControls ? (
+            <SecurityRecoverySection
+              form={securityForm}
+              onFieldChange={setSecurityField}
+              loading={securityLoading}
+              error={securityError}
+              log={securityLog}
+              onCreateSecurityIncident={() =>
+                runSecurityAction(
+                  "/v1/security-incidents/create",
+                  {
+                    incidentId: securityForm.incidentId || undefined,
+                    startTs: securityForm.startTs ? Number(securityForm.startTs) : undefined,
+                    evidenceHash: securityForm.evidenceHash,
+                    lastCleanBlock: Number(securityForm.lastCleanBlock || 0),
+                    triggerSourcesCsv: securityForm.triggerSourcesCsv,
+                  },
+                  "Create security incident"
+                )
+              }
+              onAttachLossSnapshot={() =>
+                runSecurityAction(
+                  "/v1/security-incidents/loss-snapshot",
+                  {
+                    incidentId: securityForm.incidentId,
+                    walletsCsv: securityForm.walletsCsv,
+                    lossesCsv: securityForm.lossesCsv,
+                  },
+                  "Attach loss snapshot"
+                )
+              }
+              onRecordRecovery={() =>
+                runSecurityAction(
+                  "/v1/security-incidents/recovery/record",
+                  {
+                    incidentId: securityForm.incidentId,
+                    amount: Number(securityForm.recoveryAmount || 0),
+                  },
+                  "Record recovery"
+                )
+              }
+              onDistributeRecoveryBatch={() =>
+                runSecurityAction(
+                  "/v1/security-incidents/recovery/distribute",
+                  {
+                    incidentId: securityForm.incidentId,
+                    startIndex: Number(securityForm.recoveryStartIndex || 0),
+                    limit: Number(securityForm.recoveryLimit || 20),
+                  },
+                  "Distribute recovery batch"
+                )
+              }
+              onSetHackScores={() =>
+                runSecurityAction(
+                  "/v1/security-incidents/response-score",
+                  {
+                    incidentId: securityForm.incidentId,
+                    responseSpeed: Number(securityForm.responseSpeed || 0),
+                    communicationQuality: Number(securityForm.communicationQuality || 0),
+                    poolAdequacy: Number(securityForm.poolAdequacy || 0),
+                    postMortemQuality: Number(securityForm.postMortemQuality || 0),
+                    recoveryEffort: Number(securityForm.recoveryEffort || 0),
+                  },
+                  "Set hack response scores"
+                )
+              }
+            />
+          ) : null}
+        </TabsContent>
+      </Tabs>
+
+      <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => setView("api")} variant="outline">
-              Open API Portal
+            <Button asChild variant="outline">
+              <Link href="/explorer">Open Public Explorer</Link>
             </Button>
             <Button asChild variant="outline">
               <Link href="/">Back Home</Link>
