@@ -21,7 +21,7 @@ const uptimeData = [
 
 export function UptimeChart() {
   return (
-    <div className="h-44 w-full">
+    <div className="h-44 min-h-[176px] w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={uptimeData}>
           <defs>
@@ -47,4 +47,3 @@ export function UptimeChart() {
     </div>
   );
 }
-
