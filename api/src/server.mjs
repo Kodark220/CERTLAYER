@@ -366,7 +366,7 @@ const server = createServer(async (req, res) => {
       }
 
       const protocol = ensureProtocol(body);
-      upsertScore(protocol.id, 70, "B");
+      upsertScore(protocol.id, 100, "AAA");
 
       if (LIVE_MODE) {
         const metadataJson = JSON.stringify({

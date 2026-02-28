@@ -34,6 +34,14 @@ type CommitmentPreview = {
   updatedAt: string;
 };
 
+type ProtocolPreview = {
+  id: string;
+  name: string;
+  website: string;
+  protocolType: string;
+  uptimeBps: number;
+};
+
 const initialRegisterForm: RegisterForm = { id: "", name: "", website: "", protocolType: "rpc", uptimeBps: "9990" };
 
 const initialLifecycleForm: LifecycleForm = {
@@ -128,6 +136,7 @@ export default function DashboardPage() {
   const [registerSuccess, setRegisterSuccess] = useState("");
   const [registerTxHash, setRegisterTxHash] = useState("");
   const [activeProtocolId, setActiveProtocolId] = useState("");
+  const [activeProtocol, setActiveProtocol] = useState<ProtocolPreview | null>(null);
   const [commitmentItems, setCommitmentItems] = useState<CommitmentPreview[]>([]);
   const [commitmentsLoading, setCommitmentsLoading] = useState(false);
   const [commitmentsError, setCommitmentsError] = useState("");
@@ -148,6 +157,39 @@ export default function DashboardPage() {
   const [securityLog, setSecurityLog] = useState<string[]>([]);
 
   const canSeeInternalControls = useMemo(() => session?.role === "admin", [session]);
+  const hasRegisteredProtocol = useMemo(() => Boolean(activeProtocolId), [activeProtocolId]);
+  const commitmentCount = commitmentItems.length;
+  const registeredUptimePct = useMemo(() => {
+    if (!activeProtocol) return 99.84;
+    const parsed = Number(activeProtocol.uptimeBps);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 99.84;
+    return Math.min(100, Math.max(95, parsed / 100));
+  }, [activeProtocol]);
+  const reputationSummary = useMemo(() => {
+    if (!hasRegisteredProtocol || commitmentCount === 0) {
+      return { value: "100 (AAA)", meta: "New protocol baseline" };
+    }
+
+    const hasMissed = commitmentItems.some((item) => item.result === "missed");
+    const hasPartial = commitmentItems.some((item) => item.result === "partial");
+    const score = hasMissed ? 85 : hasPartial ? 92 : 98;
+    const grade = score >= 90 ? "AAA" : score >= 80 ? "AA" : "A";
+    return {
+      value: `${score} (${grade})`,
+      meta: `Based on ${commitmentCount} commitment${commitmentCount === 1 ? "" : "s"}`,
+    };
+  }, [hasRegisteredProtocol, commitmentCount, commitmentItems]);
+  const coverageSummary = useMemo(
+    () => ({ value: "Empty", meta: "No funds yet" }),
+    []
+  );
+  const compensationSummary = useMemo(
+    () => ({
+      value: "0 USDC",
+      meta: commitmentCount > 0 ? `${commitmentCount} commitment${commitmentCount === 1 ? "" : "s"} tracked` : "No commitments yet",
+    }),
+    [commitmentCount]
+  );
 
   useEffect(() => {
     const saved = localStorage.getItem("certlayer_session_token");
@@ -180,7 +222,15 @@ export default function DashboardPage() {
         const data = await res.json();
         if (!res.ok) return;
         if (Array.isArray(data.items) && data.items.length > 0) {
-          setActiveProtocolId(data.items[0].id || "");
+          const first = data.items[0];
+          setActiveProtocolId(first.id || "");
+          setActiveProtocol({
+            id: first.id || "",
+            name: first.name || "",
+            website: first.website || "",
+            protocolType: first.protocolType || "",
+            uptimeBps: Number(first.uptimeBps || 0),
+          });
         }
       } catch {
         // non-blocking
@@ -209,6 +259,22 @@ export default function DashboardPage() {
       }
     }
     void loadCommitments();
+  }, [session, activeProtocolId]);
+
+  useEffect(() => {
+    if (!session || !activeProtocolId) return;
+    const timer = setInterval(async () => {
+      try {
+        const res = await getJson(`/v1/commitments?protocolId=${encodeURIComponent(activeProtocolId)}`, session.token);
+        const data = await res.json();
+        if (res.ok) {
+          setCommitmentItems(Array.isArray(data.items) ? data.items : []);
+        }
+      } catch {
+        // polling is best-effort
+      }
+    }, 15000);
+    return () => clearInterval(timer);
   }, [session, activeProtocolId]);
 
   function signOut() {
@@ -257,6 +323,13 @@ export default function DashboardPage() {
       const suffix = data.mode === "local" ? " (local mode: on-chain write disabled)" : "";
       setRegisterSuccess(`Protocol registered: ${data.protocol.id}${suffix}`);
       setActiveProtocolId(data.protocol.id);
+      setActiveProtocol({
+        id: data.protocol.id,
+        name: data.protocol.name || "",
+        website: data.protocol.website || "",
+        protocolType: data.protocol.protocolType || "",
+        uptimeBps: Number(data.protocol.uptimeBps || 0),
+      });
       setRegisterTxHash(data.onchain?.txHash || "");
       setRegisterForm((prev) => ({ ...prev, id: "" }));
     } catch (e) {
@@ -408,7 +481,11 @@ export default function DashboardPage() {
     <PageShell>
       <PageHeader
         title="Protocol Dashboard"
-        description="Private operational view for protocol teams."
+        description={
+          hasRegisteredProtocol
+            ? "Private operational view for protocol teams."
+            : "Complete onboarding to unlock protocol metrics."
+        }
         status="Live Monitoring"
         meta={
           <div className="flex flex-wrap items-center gap-3">
@@ -425,22 +502,33 @@ export default function DashboardPage() {
         }
       />
 
-      <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <MetricCard label="Reputation Score" value="78.4 (A)" meta="Updated 2 min ago" />
-        <MetricCard label="Coverage Pool" value="245,000 USDC" />
-        <MetricCard label="30d Uptime" value="99.82% ↑" />
-        <MetricCard label="Compensation Paid" value="12,430 USDC" />
-      </section>
+      {hasRegisteredProtocol ? (
+        <>
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <MetricCard label="Reputation Score" value={reputationSummary.value} meta={reputationSummary.meta} />
+            <MetricCard label="Coverage Pool" value={coverageSummary.value} meta={coverageSummary.meta} />
+            <MetricCard label="30d Uptime" value={`${registeredUptimePct.toFixed(2)}% ↑`} meta="From registered protocol target" />
+            <MetricCard label="Compensation Paid" value={compensationSummary.value} meta={compensationSummary.meta} />
+          </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Uptime Trend (90d)</CardTitle>
-          <CardDescription>Reliability trend preview for internal operations.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <UptimeChart />
-        </CardContent>
-      </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Uptime Trend (90d)</CardTitle>
+              <CardDescription>Reliability trend preview for internal operations.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <UptimeChart previewUptime={registeredUptimePct} />
+            </CardContent>
+          </Card>
+        </>
+      ) : (
+        <Card className="border-border/70 bg-card shadow-sm">
+          <CardHeader>
+            <CardTitle>Onboarding In Progress</CardTitle>
+            <CardDescription>Register your protocol below. Metrics and trend cards appear immediately after successful registration.</CardDescription>
+          </CardHeader>
+        </Card>
+      )}
 
       <div className="my-1 h-px bg-border/70" />
 
@@ -454,20 +542,37 @@ export default function DashboardPage() {
 
         <TabsContent value="protocol" className="mt-4">
           <div className="space-y-4">
-            <ProtocolRegistrationSection
-              form={registerForm}
-              onFieldChange={setRegisterField}
-              onSubmit={submitProtocolRegistration}
-              onSubmitWithWalletConfirm={submitProtocolRegistrationWithWalletConfirm}
-              loading={registerLoading}
-              walletConfirmLoading={walletConfirmLoading}
-              success={registerSuccess}
-              txHash={registerTxHash}
-              error={registerError}
-              canSeeInternalControls={canSeeInternalControls}
-              activeProtocolId={activeProtocolId}
-              onActiveProtocolIdChange={setActiveProtocolId}
-            />
+            {!canSeeInternalControls && hasRegisteredProtocol ? (
+              <Card className="border-border/70 bg-card shadow-sm">
+                <CardHeader>
+                  <CardTitle>Protocol Registered</CardTitle>
+                  <CardDescription>Your onboarding is complete. Commitment actions are managed by admins.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Protocol: <span className="font-semibold text-foreground">{activeProtocol?.name || activeProtocolId}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    ID: <span className="font-mono">{activeProtocolId}</span>
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <ProtocolRegistrationSection
+                form={registerForm}
+                onFieldChange={setRegisterField}
+                onSubmit={submitProtocolRegistration}
+                onSubmitWithWalletConfirm={submitProtocolRegistrationWithWalletConfirm}
+                loading={registerLoading}
+                walletConfirmLoading={walletConfirmLoading}
+                success={registerSuccess}
+                txHash={registerTxHash}
+                error={registerError}
+                canSeeInternalControls={canSeeInternalControls}
+                activeProtocolId={activeProtocolId}
+                onActiveProtocolIdChange={setActiveProtocolId}
+              />
+            )}
 
             <Card className="border-border/70 bg-card shadow-sm">
               <CardHeader>

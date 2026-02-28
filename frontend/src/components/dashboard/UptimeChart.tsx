@@ -19,11 +19,15 @@ const uptimeData = [
   { date: "Feb 25", uptime: 99.82 },
 ];
 
-export function UptimeChart() {
+export function UptimeChart({ previewUptime }: { previewUptime?: number }) {
+  const chartData = previewUptime
+    ? uptimeData.map((point) => (point.date === "Jan 15" ? { ...point, uptime: previewUptime } : point))
+    : uptimeData;
+
   return (
     <div className="h-44 min-h-[176px] w-full min-w-0">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={uptimeData}>
+        <AreaChart data={chartData}>
           <defs>
             <linearGradient id="uptimeGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#2a76f6" stopOpacity={0.2} />
