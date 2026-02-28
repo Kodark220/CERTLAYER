@@ -345,15 +345,9 @@ export default function DashboardPage() {
       <Tabs value={tab} onValueChange={(v) => setTab(v as "protocol" | "incidents" | "commitments" | "security")} className="w-full">
         <TabsList className="flex h-auto flex-wrap justify-start">
           <TabsTrigger value="protocol">Register Protocol</TabsTrigger>
-          <TabsTrigger value="incidents" disabled={!canSeeInternalControls}>
-            Incident Lifecycle
-          </TabsTrigger>
-          <TabsTrigger value="commitments" disabled={!canSeeInternalControls}>
-            Commitments
-          </TabsTrigger>
-          <TabsTrigger value="security" disabled={!canSeeInternalControls}>
-            Security & Recovery
-          </TabsTrigger>
+          {canSeeInternalControls ? <TabsTrigger value="incidents">Incident Lifecycle</TabsTrigger> : null}
+          {canSeeInternalControls ? <TabsTrigger value="commitments">Commitments</TabsTrigger> : null}
+          {canSeeInternalControls ? <TabsTrigger value="security">Security Response</TabsTrigger> : null}
         </TabsList>
 
         <TabsContent value="protocol" className="mt-4">
@@ -533,27 +527,6 @@ export default function DashboardPage() {
                   "Attach loss snapshot"
                 )
               }
-              onRecordRecovery={() =>
-                runSecurityAction(
-                  "/v1/security-incidents/recovery/record",
-                  {
-                    incidentId: securityForm.incidentId,
-                    amount: Number(securityForm.recoveryAmount || 0),
-                  },
-                  "Record recovery"
-                )
-              }
-              onDistributeRecoveryBatch={() =>
-                runSecurityAction(
-                  "/v1/security-incidents/recovery/distribute",
-                  {
-                    incidentId: securityForm.incidentId,
-                    startIndex: Number(securityForm.recoveryStartIndex || 0),
-                    limit: Number(securityForm.recoveryLimit || 20),
-                  },
-                  "Distribute recovery batch"
-                )
-              }
               onSetHackScores={() =>
                 runSecurityAction(
                   "/v1/security-incidents/response-score",
@@ -589,4 +562,3 @@ export default function DashboardPage() {
     </PageShell>
   );
 }
-

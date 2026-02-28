@@ -14,8 +14,6 @@ type Props = {
   log: string[];
   onCreateSecurityIncident: () => void;
   onAttachLossSnapshot: () => void;
-  onRecordRecovery: () => void;
-  onDistributeRecoveryBatch: () => void;
   onSetHackScores: () => void;
 };
 
@@ -27,14 +25,12 @@ export function SecurityRecoverySection({
   log,
   onCreateSecurityIncident,
   onAttachLossSnapshot,
-  onRecordRecovery,
-  onDistributeRecoveryBatch,
   onSetHackScores,
 }: Props) {
   return (
     <Card className="border-border/70 bg-card shadow-sm">
       <CardHeader>
-        <CardTitle>Security & Recovery (Admin)</CardTitle>
+        <CardTitle>Security Incident Response (Admin)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
@@ -75,30 +71,6 @@ export function SecurityRecoverySection({
         </div>
         <Button variant="outline" onClick={onAttachLossSnapshot} disabled={loading}>
           {loading ? "Running..." : "Attach Loss Snapshot"}
-        </Button>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Recovery Amount</Label>
-            <Input value={form.recoveryAmount} onChange={(e) => onFieldChange("recoveryAmount", e.target.value)} />
-          </div>
-        </div>
-        <Button variant="outline" onClick={onRecordRecovery} disabled={loading}>
-          {loading ? "Running..." : "Record Recovery"}
-        </Button>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Recovery Start Index</Label>
-            <Input value={form.recoveryStartIndex} onChange={(e) => onFieldChange("recoveryStartIndex", e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Recovery Limit</Label>
-            <Input value={form.recoveryLimit} onChange={(e) => onFieldChange("recoveryLimit", e.target.value)} />
-          </div>
-        </div>
-        <Button variant="outline" onClick={onDistributeRecoveryBatch} disabled={loading}>
-          {loading ? "Running..." : "Distribute Recovery Batch"}
         </Button>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -144,4 +116,3 @@ export function SecurityRecoverySection({
     </Card>
   );
 }
-

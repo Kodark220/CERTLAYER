@@ -48,6 +48,7 @@ export function CommitmentsSection({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="uptime">uptime</SelectItem>
                 <SelectItem value="governance">governance</SelectItem>
                 <SelectItem value="roadmap">roadmap</SelectItem>
                 <SelectItem value="financial">financial</SelectItem>
@@ -126,4 +127,3 @@ export function CommitmentsSection({
     </Card>
   );
 }
-
