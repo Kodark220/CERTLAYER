@@ -87,14 +87,9 @@ export function ProtocolRegistrationSection({
             </div>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={onSubmit} disabled={loading || walletConfirmLoading}>
-            {loading ? "Submitting..." : "Register Protocol"}
-          </Button>
-          <Button variant="outline" onClick={onSubmitWithWalletConfirm} disabled={loading || walletConfirmLoading}>
-            {walletConfirmLoading ? "Confirming..." : "Register Protocol (Confirm in Wallet)"}
-          </Button>
-        </div>
+        <Button onClick={onSubmitWithWalletConfirm} disabled={loading || walletConfirmLoading}>
+          {loading || walletConfirmLoading ? "Submitting..." : "Register Protocol"}
+        </Button>
         {success ? <p className="text-sm text-emerald-400">{success}</p> : null}
         {txHash ? <p className="break-all font-mono text-xs text-muted-foreground">Tx Hash: {txHash}</p> : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
