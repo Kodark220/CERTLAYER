@@ -7,6 +7,57 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CommitmentForm } from "../../types/dashboard";
 
+const verificationRuleTemplates = [
+  { id: "uptime_30d", type: "uptime", label: "Uptime 30d >= 9990", rule: "30d uptime_bps >= 9990" },
+  { id: "uptime_downtime", type: "uptime", label: "Monthly downtime <= 43", rule: "monthly_downtime_minutes <= 43" },
+  { id: "security_ack", type: "security", label: "Critical ack <= 30m", rule: "critical_incident_ack_minutes <= 30" },
+  { id: "security_postmortem", type: "security", label: "Postmortem <= 72h", rule: "postmortem_published_within_hours <= 72" },
+  { id: "security_patch", type: "security", label: "Patch <= 24h", rule: "security_patch_released_within_hours <= 24" },
+  {
+    id: "communication_status",
+    type: "communication",
+    label: "Status update every <= 60m",
+    rule: "status_updates_posted_every_minutes <= 60 during_incident == true",
+  },
+  {
+    id: "communication_notice",
+    type: "communication",
+    label: "Incident notice <= 15m",
+    rule: "incident_notice_published_within_minutes <= 15",
+  },
+  { id: "financial_pool", type: "financial", label: "Pool >= 250000", rule: "coverage_pool_balance_usdc >= 250000" },
+  {
+    id: "financial_report",
+    type: "financial",
+    label: "Treasury report by deadline",
+    rule: "treasury_report_published_by_deadline == true",
+  },
+  {
+    id: "governance_vote",
+    type: "governance",
+    label: "Governance vote by deadline",
+    rule: "governance_vote_executed_by_deadline == true",
+  },
+  {
+    id: "governance_status",
+    type: "governance",
+    label: "Proposal status finalized",
+    rule: "proposal_status in [approved, rejected] by_deadline == true",
+  },
+  {
+    id: "roadmap_alpha",
+    type: "roadmap",
+    label: "Alpha milestone by deadline",
+    rule: "milestone_alpha_released_by_deadline == true",
+  },
+  {
+    id: "roadmap_completion",
+    type: "roadmap",
+    label: "Feature completion 100%",
+    rule: "feature_set_completion_percent >= 100 by_deadline == true",
+  },
+];
+
 type Props = {
   form: CommitmentForm;
   onFieldChange: (field: keyof CommitmentForm, value: string) => void;
@@ -30,6 +81,8 @@ export function CommitmentsSection({
   onSubmitEvidence,
   onFinalize,
 }: Props) {
+  const availableTemplates = verificationRuleTemplates.filter((t) => t.type === form.commitmentType);
+
   return (
     <Card className="border-border/70 bg-card shadow-sm">
       <CardHeader>
@@ -72,6 +125,31 @@ export function CommitmentsSection({
           <div className="space-y-2">
             <Label>Verification Rule</Label>
             <Input value={form.verificationRule} onChange={(e) => onFieldChange("verificationRule", e.target.value)} />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <Label>Verification Rule Template</Label>
+            <Select
+              onValueChange={(value) => {
+                const selected = verificationRuleTemplates.find((t) => t.id === value);
+                if (selected) onFieldChange("verificationRule", selected.rule);
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Pick a template to auto-fill verification rule" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableTemplates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.label}
+                  </SelectItem>
+                ))}
+                {availableTemplates.length === 0 ? (
+                  <SelectItem value="no_template_available" disabled>
+                    No templates for selected type
+                  </SelectItem>
+                ) : null}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

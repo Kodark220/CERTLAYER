@@ -9,6 +9,7 @@ import { useAccount, useConnect, useSignMessage } from "wagmi";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { CommitmentsSection } from "@/src/components/dashboard/CommitmentsSection";
@@ -137,6 +138,7 @@ export default function DashboardPage() {
   const [registerTxHash, setRegisterTxHash] = useState("");
   const [activeProtocolId, setActiveProtocolId] = useState("");
   const [activeProtocol, setActiveProtocol] = useState<ProtocolPreview | null>(null);
+  const [protocolOptions, setProtocolOptions] = useState<ProtocolPreview[]>([]);
   const [commitmentItems, setCommitmentItems] = useState<CommitmentPreview[]>([]);
   const [commitmentsLoading, setCommitmentsLoading] = useState(false);
   const [commitmentsError, setCommitmentsError] = useState("");
@@ -222,6 +224,14 @@ export default function DashboardPage() {
         const data = await res.json();
         if (!res.ok) return;
         if (Array.isArray(data.items) && data.items.length > 0) {
+          const mapped = data.items.map((item: any) => ({
+            id: item.id || "",
+            name: item.name || "",
+            website: item.website || "",
+            protocolType: item.protocolType || "",
+            uptimeBps: Number(item.uptimeBps || 0),
+          }));
+          setProtocolOptions(mapped);
           const first = data.items[0];
           setActiveProtocolId(first.id || "");
           setActiveProtocol({
@@ -323,12 +333,20 @@ export default function DashboardPage() {
       const suffix = data.mode === "local" ? " (local mode: on-chain write disabled)" : "";
       setRegisterSuccess(`Protocol registered: ${data.protocol.id}${suffix}`);
       setActiveProtocolId(data.protocol.id);
-      setActiveProtocol({
+      const createdProtocol = {
         id: data.protocol.id,
         name: data.protocol.name || "",
         website: data.protocol.website || "",
         protocolType: data.protocol.protocolType || "",
         uptimeBps: Number(data.protocol.uptimeBps || 0),
+      };
+      setActiveProtocol(createdProtocol);
+      setProtocolOptions((prev) => {
+        const exists = prev.some((p) => p.id === createdProtocol.id);
+        if (exists) {
+          return prev.map((p) => (p.id === createdProtocol.id ? createdProtocol : p));
+        }
+        return [createdProtocol, ...prev];
       });
       setRegisterTxHash(data.onchain?.txHash || "");
       setRegisterForm((prev) => ({ ...prev, id: "" }));
@@ -577,7 +595,6 @@ export default function DashboardPage() {
             <Card className="border-border/70 bg-card shadow-sm">
               <CardHeader>
                 <CardTitle>Protocol Commitments</CardTitle>
-                <CardDescription>Read-only status for commitments attached to this registered protocol.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {!activeProtocolId ? <p className="text-sm text-muted-foreground">No active protocol selected yet.</p> : null}
@@ -694,51 +711,87 @@ export default function DashboardPage() {
 
         <TabsContent value="commitments" className="mt-4">
           {canSeeInternalControls ? (
-            <CommitmentsSection
-              form={commitmentForm}
-              onFieldChange={setCommitmentField}
-              loading={commitmentLoading}
-              error={commitmentError}
-              log={commitmentLog}
-              onRegister={() =>
-                runCommitmentAction(
-                  "/v1/commitments/register",
-                  {
-                    commitmentId: commitmentForm.commitmentId,
-                    commitmentType: commitmentForm.commitmentType,
-                    sourceUrl: commitmentForm.sourceUrl,
-                    commitmentTextHash: commitmentForm.commitmentTextHash,
-                    deadlineTs: Number(commitmentForm.deadlineTs),
-                    verificationRule: commitmentForm.verificationRule,
-                  },
-                  "Register commitment"
-                )
-              }
-              onEvaluate={() =>
-                runCommitmentAction(
-                  "/v1/commitments/evaluate",
-                  {
-                    commitmentId: commitmentForm.commitmentId,
-                    result: commitmentForm.result,
-                    evidenceHash: commitmentForm.evidenceHash,
-                  },
-                  "Evaluate commitment"
-                )
-              }
-              onSubmitEvidence={() =>
-                runCommitmentAction(
-                  "/v1/commitments/evidence",
-                  {
-                    commitmentId: commitmentForm.commitmentId,
-                    evidenceHash: commitmentForm.evidenceHash,
-                  },
-                  "Submit fulfillment evidence"
-                )
-              }
-              onFinalize={() =>
-                runCommitmentAction("/v1/commitments/finalize", { commitmentId: commitmentForm.commitmentId }, "Finalize commitment")
-              }
-            />
+            <div className="space-y-4">
+              <Card className="border-border/70 bg-card shadow-sm">
+                <CardHeader>
+                  <CardTitle>Target Protocol</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Select
+                    value={activeProtocolId}
+                    onValueChange={(value) => {
+                      setActiveProtocolId(value);
+                      const selected = protocolOptions.find((p) => p.id === value) || null;
+                      setActiveProtocol(selected);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select protocol" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {protocolOptions.map((protocol) => (
+                        <SelectItem key={protocol.id} value={protocol.id}>
+                          {protocol.name || protocol.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {activeProtocolId ? (
+                    <p className="text-xs text-muted-foreground">
+                      Selected protocol ID: <span className="font-mono">{activeProtocolId}</span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No protocol selected yet.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <CommitmentsSection
+                form={commitmentForm}
+                onFieldChange={setCommitmentField}
+                loading={commitmentLoading}
+                error={commitmentError}
+                log={commitmentLog}
+                onRegister={() =>
+                  runCommitmentAction(
+                    "/v1/commitments/register",
+                    {
+                      commitmentId: commitmentForm.commitmentId,
+                      commitmentType: commitmentForm.commitmentType,
+                      sourceUrl: commitmentForm.sourceUrl,
+                      commitmentTextHash: commitmentForm.commitmentTextHash,
+                      deadlineTs: Number(commitmentForm.deadlineTs),
+                      verificationRule: commitmentForm.verificationRule,
+                    },
+                    "Register commitment"
+                  )
+                }
+                onEvaluate={() =>
+                  runCommitmentAction(
+                    "/v1/commitments/evaluate",
+                    {
+                      commitmentId: commitmentForm.commitmentId,
+                      result: commitmentForm.result,
+                      evidenceHash: commitmentForm.evidenceHash,
+                    },
+                    "Evaluate commitment"
+                  )
+                }
+                onSubmitEvidence={() =>
+                  runCommitmentAction(
+                    "/v1/commitments/evidence",
+                    {
+                      commitmentId: commitmentForm.commitmentId,
+                      evidenceHash: commitmentForm.evidenceHash,
+                    },
+                    "Submit fulfillment evidence"
+                  )
+                }
+                onFinalize={() =>
+                  runCommitmentAction("/v1/commitments/finalize", { commitmentId: commitmentForm.commitmentId }, "Finalize commitment")
+                }
+              />
+            </div>
           ) : null}
         </TabsContent>
 
