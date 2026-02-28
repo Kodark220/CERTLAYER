@@ -493,6 +493,23 @@ export default function DashboardPage() {
     setPoolDepositSuccess("");
     setPoolDepositLoading(true);
     try {
+      let wallet = address as string | undefined;
+      if (!wallet) {
+        const connected = await connectAsync({ connector: injected() });
+        wallet = connected.accounts?.[0];
+      }
+      if (!wallet) throw new Error("No wallet selected");
+
+      const confirmationMessage = [
+        "CertLayer Pool Funding Confirmation",
+        `Wallet: ${wallet}`,
+        `Protocol ID: ${activeProtocolId}`,
+        `Amount (USDC): ${amount}`,
+        `Timestamp: ${new Date().toISOString()}`,
+      ].join("\n");
+
+      await signMessageAsync({ message: confirmationMessage });
+
       const res = await postJson("/v1/pools/deposit", { protocolId: activeProtocolId, amount }, session.token);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Pool deposit failed");
