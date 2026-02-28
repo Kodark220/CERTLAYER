@@ -2,6 +2,7 @@ export const db = {
   protocols: [],
   incidents: [],
   scores: [],
+  commitments: [],
 };
 
 export function ensureProtocol(payload) {
@@ -70,4 +71,45 @@ export function upsertScore(protocolId, score, grade) {
   };
   db.scores.push(created);
   return created;
+}
+
+export function upsertCommitment(payload) {
+  const now = new Date().toISOString();
+  const existing = db.commitments.find(
+    (c) => c.protocolId === payload.protocolId && c.commitmentId === payload.commitmentId
+  );
+
+  if (existing) {
+    if (payload.commitmentType !== undefined) existing.commitmentType = payload.commitmentType;
+    if (payload.sourceUrl !== undefined) existing.sourceUrl = payload.sourceUrl;
+    if (payload.commitmentTextHash !== undefined) existing.commitmentTextHash = payload.commitmentTextHash;
+    if (payload.deadlineTs !== undefined) existing.deadlineTs = Number(payload.deadlineTs);
+    if (payload.verificationRule !== undefined) existing.verificationRule = payload.verificationRule;
+    if (payload.result !== undefined) existing.result = payload.result;
+    if (payload.evidenceHash !== undefined) existing.evidenceHash = payload.evidenceHash;
+    if (payload.status !== undefined) existing.status = payload.status;
+    existing.updatedAt = now;
+    return existing;
+  }
+
+  const created = {
+    protocolId: payload.protocolId,
+    commitmentId: payload.commitmentId,
+    commitmentType: payload.commitmentType || "other",
+    sourceUrl: payload.sourceUrl || "",
+    commitmentTextHash: payload.commitmentTextHash || "",
+    deadlineTs: Number(payload.deadlineTs || 0),
+    verificationRule: payload.verificationRule || "",
+    result: payload.result || "",
+    evidenceHash: payload.evidenceHash || "",
+    status: payload.status || "registered",
+    createdAt: now,
+    updatedAt: now,
+  };
+  db.commitments.push(created);
+  return created;
+}
+
+export function listCommitmentsByProtocol(protocolId) {
+  return db.commitments.filter((c) => c.protocolId === protocolId);
 }

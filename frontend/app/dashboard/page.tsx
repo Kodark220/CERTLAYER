@@ -24,6 +24,16 @@ import type { AuthSession, CommitmentForm, LifecycleForm, RegisterForm, Security
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 const PUBLIC_API_KEY = process.env.NEXT_PUBLIC_API_KEY || "";
 
+type CommitmentPreview = {
+  protocolId: string;
+  commitmentId: string;
+  commitmentType: string;
+  status: string;
+  result: string;
+  deadlineTs: number;
+  updatedAt: string;
+};
+
 const initialRegisterForm: RegisterForm = { id: "", name: "", website: "", protocolType: "rpc", uptimeBps: "9990" };
 
 const initialLifecycleForm: LifecycleForm = {
@@ -94,6 +104,13 @@ async function postJson(path: string, body: Record<string, unknown>, token?: str
   return fetch(`${API_BASE_URL}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
 }
 
+async function getJson(path: string, token?: string) {
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (PUBLIC_API_KEY) headers["x-api-key"] = PUBLIC_API_KEY;
+  return fetch(`${API_BASE_URL}${path}`, { method: "GET", headers });
+}
+
 export default function DashboardPage() {
   const { disconnect } = useDisconnect();
   const { address } = useAccount();
@@ -111,6 +128,9 @@ export default function DashboardPage() {
   const [registerSuccess, setRegisterSuccess] = useState("");
   const [registerTxHash, setRegisterTxHash] = useState("");
   const [activeProtocolId, setActiveProtocolId] = useState("");
+  const [commitmentItems, setCommitmentItems] = useState<CommitmentPreview[]>([]);
+  const [commitmentsLoading, setCommitmentsLoading] = useState(false);
+  const [commitmentsError, setCommitmentsError] = useState("");
 
   const [lifecycleForm, setLifecycleForm] = useState<LifecycleForm>(initialLifecycleForm);
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
@@ -151,6 +171,45 @@ export default function DashboardPage() {
       setTab("protocol");
     }
   }, [canSeeInternalControls, tab]);
+
+  useEffect(() => {
+    async function loadProtocolsForSession() {
+      if (!session || activeProtocolId) return;
+      try {
+        const res = await getJson("/v1/protocols", session.token);
+        const data = await res.json();
+        if (!res.ok) return;
+        if (Array.isArray(data.items) && data.items.length > 0) {
+          setActiveProtocolId(data.items[0].id || "");
+        }
+      } catch {
+        // non-blocking
+      }
+    }
+    void loadProtocolsForSession();
+  }, [session, activeProtocolId]);
+
+  useEffect(() => {
+    async function loadCommitments() {
+      if (!session || !activeProtocolId) {
+        setCommitmentItems([]);
+        return;
+      }
+      setCommitmentsLoading(true);
+      setCommitmentsError("");
+      try {
+        const res = await getJson(`/v1/commitments?protocolId=${encodeURIComponent(activeProtocolId)}`, session.token);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load commitments");
+        setCommitmentItems(Array.isArray(data.items) ? data.items : []);
+      } catch (e) {
+        setCommitmentsError(e instanceof Error ? e.message : "Failed to load commitments");
+      } finally {
+        setCommitmentsLoading(false);
+      }
+    }
+    void loadCommitments();
+  }, [session, activeProtocolId]);
 
   function signOut() {
     disconnect();
@@ -276,6 +335,11 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error(data.error || `${label} failed`);
       const tx = data.onchain?.txHash ? ` tx=${data.onchain.txHash}` : "";
       setCommitmentLog((prev) => [`${label} success${tx}`, ...prev].slice(0, 20));
+      const refreshRes = await getJson(`/v1/commitments?protocolId=${encodeURIComponent(protocolId)}`, session.token);
+      const refreshData = await refreshRes.json();
+      if (refreshRes.ok) {
+        setCommitmentItems(Array.isArray(refreshData.items) ? refreshData.items : []);
+      }
     } catch (e) {
       setCommitmentError(e instanceof Error ? e.message : `${label} failed`);
     } finally {
@@ -389,20 +453,58 @@ export default function DashboardPage() {
         </TabsList>
 
         <TabsContent value="protocol" className="mt-4">
-          <ProtocolRegistrationSection
-            form={registerForm}
-            onFieldChange={setRegisterField}
-            onSubmit={submitProtocolRegistration}
-            onSubmitWithWalletConfirm={submitProtocolRegistrationWithWalletConfirm}
-            loading={registerLoading}
-            walletConfirmLoading={walletConfirmLoading}
-            success={registerSuccess}
-            txHash={registerTxHash}
-            error={registerError}
-            canSeeInternalControls={canSeeInternalControls}
-            activeProtocolId={activeProtocolId}
-            onActiveProtocolIdChange={setActiveProtocolId}
-          />
+          <div className="space-y-4">
+            <ProtocolRegistrationSection
+              form={registerForm}
+              onFieldChange={setRegisterField}
+              onSubmit={submitProtocolRegistration}
+              onSubmitWithWalletConfirm={submitProtocolRegistrationWithWalletConfirm}
+              loading={registerLoading}
+              walletConfirmLoading={walletConfirmLoading}
+              success={registerSuccess}
+              txHash={registerTxHash}
+              error={registerError}
+              canSeeInternalControls={canSeeInternalControls}
+              activeProtocolId={activeProtocolId}
+              onActiveProtocolIdChange={setActiveProtocolId}
+            />
+
+            <Card className="border-border/70 bg-card shadow-sm">
+              <CardHeader>
+                <CardTitle>Protocol Commitments</CardTitle>
+                <CardDescription>Read-only status for commitments attached to this registered protocol.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {!activeProtocolId ? <p className="text-sm text-muted-foreground">No active protocol selected yet.</p> : null}
+                {activeProtocolId ? (
+                  <p className="text-xs text-muted-foreground">
+                    Active Protocol ID: <span className="font-mono">{activeProtocolId}</span>
+                  </p>
+                ) : null}
+                {commitmentsLoading ? <p className="text-sm text-muted-foreground">Loading commitments...</p> : null}
+                {commitmentsError ? <p className="text-sm text-destructive">{commitmentsError}</p> : null}
+                {!commitmentsLoading && !commitmentsError && activeProtocolId && commitmentItems.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No commitments added yet.</p>
+                ) : null}
+                {!commitmentsLoading && !commitmentsError && commitmentItems.length > 0 ? (
+                  <div className="space-y-2">
+                    {commitmentItems.map((item) => (
+                      <div key={`${item.protocolId}-${item.commitmentId}`} className="rounded-md border border-border/70 bg-muted/20 p-3">
+                        <p className="text-sm">
+                          <span className="font-mono">{item.commitmentId}</span> • {item.commitmentType}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Status: {item.status}
+                          {item.result ? ` • Result: ${item.result}` : ""}
+                          {item.deadlineTs ? ` • Deadline: ${item.deadlineTs}` : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="incidents" className="mt-4">

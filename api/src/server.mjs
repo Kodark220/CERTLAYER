@@ -9,7 +9,9 @@ import {
   db,
   ensureProtocol,
   findProtocol,
+  listCommitmentsByProtocol,
   listProtocolsByOwnerWallet,
+  upsertCommitment,
   updateProtocol,
   upsertScore,
 } from "./store.mjs";
@@ -404,6 +406,17 @@ const server = createServer(async (req, res) => {
       return send(res, 200, { items: listProtocolsByOwnerWallet(session.wallet) });
     }
 
+    if (req.method === "GET" && pathname === "/v1/commitments") {
+      const protocolId = url.searchParams.get("protocolId") || "";
+      if (!protocolId) return send(res, 400, { error: "protocolId required" });
+
+      const authz = enforceProtocolOwnership(req, protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
+
+      const items = listCommitmentsByProtocol(protocolId);
+      return send(res, 200, { items });
+    }
+
     if (req.method === "POST" && pathname === "/v1/incidents") {
       const body = await readBody(req);
       const authz = enforceProtocolOwnership(req, body.protocolId);
@@ -695,6 +708,17 @@ const server = createServer(async (req, res) => {
       const authz = enforceProtocolOwnership(req, body.protocolId);
       if (!authz.ok) return send(res, authz.status, { error: authz.error });
 
+      const commitment = upsertCommitment({
+        protocolId: body.protocolId,
+        commitmentId: body.commitmentId,
+        commitmentType: body.commitmentType,
+        sourceUrl: body.sourceUrl || "",
+        commitmentTextHash: body.commitmentTextHash || "",
+        deadlineTs: Number(body.deadlineTs),
+        verificationRule: body.verificationRule || "",
+        status: "registered",
+      });
+
       if (LIVE_MODE) {
         const onchain = await contractWrite("register_commitment", [
           body.commitmentId,
@@ -705,10 +729,10 @@ const server = createServer(async (req, res) => {
           Number(body.deadlineTs),
           body.verificationRule || "",
         ]);
-        return send(res, 201, { ok: true, onchain });
+        return send(res, 201, { ok: true, commitment, onchain });
       }
 
-      return send(res, 201, { ok: true, mode: "local" });
+      return send(res, 201, { ok: true, commitment, mode: "local" });
     }
 
     if (req.method === "POST" && pathname === "/v1/commitments/evaluate") {
@@ -720,6 +744,14 @@ const server = createServer(async (req, res) => {
       if (!authz.ok) return send(res, authz.status, { error: authz.error });
       const nowTs = Math.floor(Date.now() / 1000);
 
+      const commitment = upsertCommitment({
+        protocolId: body.protocolId,
+        commitmentId: body.commitmentId,
+        result: body.result,
+        evidenceHash: body.evidenceHash || "",
+        status: "evaluated",
+      });
+
       if (LIVE_MODE) {
         const onchain = await contractWrite("evaluate_commitment", [
           body.commitmentId,
@@ -727,10 +759,10 @@ const server = createServer(async (req, res) => {
           body.evidenceHash || "",
           nowTs,
         ]);
-        return send(res, 200, { ok: true, onchain });
+        return send(res, 200, { ok: true, commitment, onchain });
       }
 
-      return send(res, 200, { ok: true, mode: "local" });
+      return send(res, 200, { ok: true, commitment, mode: "local" });
     }
 
     if (req.method === "POST" && pathname === "/v1/commitments/evidence") {
@@ -741,15 +773,22 @@ const server = createServer(async (req, res) => {
       const authz = enforceProtocolOwnership(req, body.protocolId);
       if (!authz.ok) return send(res, authz.status, { error: authz.error });
 
+      const commitment = upsertCommitment({
+        protocolId: body.protocolId,
+        commitmentId: body.commitmentId,
+        evidenceHash: body.evidenceHash || "",
+        status: "evidence_submitted",
+      });
+
       if (LIVE_MODE) {
         const onchain = await contractWrite("submit_commitment_fulfillment_evidence", [
           body.commitmentId,
           body.evidenceHash || "",
         ]);
-        return send(res, 200, { ok: true, onchain });
+        return send(res, 200, { ok: true, commitment, onchain });
       }
 
-      return send(res, 200, { ok: true, mode: "local" });
+      return send(res, 200, { ok: true, commitment, mode: "local" });
     }
 
     if (req.method === "POST" && pathname === "/v1/commitments/finalize") {
@@ -761,12 +800,18 @@ const server = createServer(async (req, res) => {
       if (!authz.ok) return send(res, authz.status, { error: authz.error });
       const nowTs = Math.floor(Date.now() / 1000);
 
+      const commitment = upsertCommitment({
+        protocolId: body.protocolId,
+        commitmentId: body.commitmentId,
+        status: "finalized",
+      });
+
       if (LIVE_MODE) {
         const onchain = await contractWrite("finalize_commitment", [body.commitmentId, nowTs]);
-        return send(res, 200, { ok: true, onchain });
+        return send(res, 200, { ok: true, commitment, onchain });
       }
 
-      return send(res, 200, { ok: true, mode: "local" });
+      return send(res, 200, { ok: true, commitment, mode: "local" });
     }
 
     if (req.method === "POST" && pathname === "/v1/incidents/decision") {
