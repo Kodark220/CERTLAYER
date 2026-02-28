@@ -127,7 +127,7 @@ export default function Navbar() {
                     disabled={connecting || authLoading}
                     className="w-full rounded-lg bg-[#2A76F6] px-3 py-2 text-sm font-semibold hover:bg-[#1f63d5] disabled:opacity-60"
                   >
-                    {connecting || authLoading ? "Signing In..." : "Connect Wallet + Sign In"}
+                    {connecting || authLoading ? "Signing In..." : "Connect Wallet"}
                   </button>
                 )}
 
@@ -136,7 +136,7 @@ export default function Navbar() {
                   onClick={() => setOpen(false)}
                   className="mt-2 block rounded-lg px-3 py-2 text-sm text-white/80 hover:bg-white/5 hover:text-white"
                 >
-                  Open Sign In Page
+                  Sign in with Email
                 </Link>
                 {authError ? <p className="mt-2 px-2 text-xs text-red-300">{authError}</p> : null}
               </div>
