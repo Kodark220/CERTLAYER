@@ -84,7 +84,7 @@ export function ProtocolRegistrationSection({
           ) : null}
         </div>
         <Button onClick={onSubmit} disabled={loading}>
-          {loading ? "Submitting..." : "Register Protocol On-Chain"}
+          {loading ? "Submitting..." : "Register Protocol"}
         </Button>
         {success ? <p className="text-sm text-emerald-400">{success}</p> : null}
         {txHash ? <p className="break-all font-mono text-xs text-muted-foreground">Tx Hash: {txHash}</p> : null}
@@ -93,4 +93,3 @@ export function ProtocolRegistrationSection({
     </Card>
   );
 }
-

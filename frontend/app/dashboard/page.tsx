@@ -189,7 +189,8 @@ export default function DashboardPage() {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Registration failed");
-      setRegisterSuccess(`Protocol registered: ${data.protocol.id}`);
+      const suffix = data.mode === "local" ? " (local mode: on-chain write disabled)" : "";
+      setRegisterSuccess(`Protocol registered: ${data.protocol.id}${suffix}`);
       setActiveProtocolId(data.protocol.id);
       setRegisterTxHash(data.onchain?.txHash || "");
       setRegisterForm((prev) => ({ ...prev, id: "" }));

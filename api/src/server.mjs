@@ -2,7 +2,8 @@ import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
 import { createClient } from "genlayer-js";
 import { localnet, studionet } from "genlayer-js/chains";
-import { recoverMessageAddress } from "viem";
+import { getAddress, recoverMessageAddress } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import {
   addIncident,
   db,
@@ -25,10 +26,52 @@ const ADMIN_WALLETS = new Set(
 
 const GENLAYER_RPC_URL = process.env.GENLAYER_RPC_URL || "https://studio.genlayer.com/api";
 const GENLAYER_CHAIN = (process.env.GENLAYER_CHAIN || "studionet").toLowerCase();
-const GENLAYER_CONTRACT_ADDRESS = process.env.GENLAYER_CONTRACT_ADDRESS || "";
-const GENLAYER_SERVER_ACCOUNT = process.env.GENLAYER_SERVER_ACCOUNT || "";
+const RAW_GENLAYER_CONTRACT_ADDRESS = process.env.GENLAYER_CONTRACT_ADDRESS || "";
+const RAW_GENLAYER_SERVER_ACCOUNT = process.env.GENLAYER_SERVER_ACCOUNT || "";
+const RAW_GENLAYER_SERVER_PRIVATE_KEY = process.env.GENLAYER_SERVER_PRIVATE_KEY || "";
+
+function parseAddressOrEmpty(raw, name) {
+  const value = (raw || "").trim();
+  if (!value) return "";
+  try {
+    return getAddress(value);
+  } catch {
+    throw new Error(`${name} must be a valid 20-byte EVM address`);
+  }
+}
+
+function parsePrivateKeyOrEmpty(raw, name) {
+  const value = (raw || "").trim();
+  if (!value) return "";
+  if (!/^0x[a-fA-F0-9]{64}$/.test(value)) {
+    throw new Error(`${name} must be a 32-byte hex private key (0x + 64 hex chars)`);
+  }
+  return value;
+}
+
+const GENLAYER_CONTRACT_ADDRESS = parseAddressOrEmpty(RAW_GENLAYER_CONTRACT_ADDRESS, "GENLAYER_CONTRACT_ADDRESS");
+const GENLAYER_SERVER_ACCOUNT = parseAddressOrEmpty(RAW_GENLAYER_SERVER_ACCOUNT, "GENLAYER_SERVER_ACCOUNT");
+const GENLAYER_SERVER_PRIVATE_KEY = parsePrivateKeyOrEmpty(
+  RAW_GENLAYER_SERVER_PRIVATE_KEY,
+  "GENLAYER_SERVER_PRIVATE_KEY"
+);
+const GENLAYER_WRITE_ACCOUNT = GENLAYER_SERVER_PRIVATE_KEY
+  ? privateKeyToAccount(GENLAYER_SERVER_PRIVATE_KEY)
+  : "";
+
+if (GENLAYER_SERVER_PRIVATE_KEY && GENLAYER_SERVER_ACCOUNT) {
+  const derivedAddress = getAddress(privateKeyToAccount(GENLAYER_SERVER_PRIVATE_KEY).address);
+  if (derivedAddress !== GENLAYER_SERVER_ACCOUNT) {
+    throw new Error("GENLAYER_SERVER_ACCOUNT does not match address derived from GENLAYER_SERVER_PRIVATE_KEY");
+  }
+}
 
 const LIVE_MODE = Boolean(GENLAYER_CONTRACT_ADDRESS);
+const WRITE_SIGNING_MODE = GENLAYER_SERVER_PRIVATE_KEY
+  ? "private_key"
+  : GENLAYER_SERVER_ACCOUNT
+    ? "address_only"
+    : "none";
 const NONCE_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -141,16 +184,18 @@ function buildClient(forWrite = false) {
     chain: GENLAYER_CHAIN === "localnet" ? localnet : studionet,
     endpoint: GENLAYER_RPC_URL,
   };
-  if (forWrite && GENLAYER_SERVER_ACCOUNT) {
-    cfg.account = GENLAYER_SERVER_ACCOUNT;
+  if (forWrite && GENLAYER_WRITE_ACCOUNT) {
+    cfg.account = GENLAYER_WRITE_ACCOUNT;
   }
   return createClient(cfg);
 }
 
 async function contractWrite(functionName, args) {
   const client = buildClient(true);
-  if (!GENLAYER_SERVER_ACCOUNT) {
-    throw new Error("GENLAYER_SERVER_ACCOUNT is required for contract write operations");
+  if (!GENLAYER_WRITE_ACCOUNT) {
+    throw new Error(
+      "GENLAYER_SERVER_PRIVATE_KEY is required for live contract write operations"
+    );
   }
 
   const txHash = await client.writeContract({
@@ -189,7 +234,9 @@ const server = createServer(async (req, res) => {
         live_mode: LIVE_MODE,
         genlayer_chain: GENLAYER_CHAIN,
         genlayer_contract: GENLAYER_CONTRACT_ADDRESS || "",
-        has_server_account: Boolean(GENLAYER_SERVER_ACCOUNT),
+        has_server_account: Boolean(GENLAYER_WRITE_ACCOUNT),
+        has_server_private_key: Boolean(GENLAYER_SERVER_PRIVATE_KEY),
+        write_signing_mode: WRITE_SIGNING_MODE,
         protocols: db.protocols.length,
         incidents: db.incidents.length,
         timestamp: new Date().toISOString(),
@@ -311,7 +358,9 @@ const server = createServer(async (req, res) => {
       }
 
       if (!isValidWallet(body.ownerWallet || "")) {
-        return send(res, 400, { error: "ownerWallet required" });
+        return send(res, 400, {
+          error: "ownerWallet required (sign in with wallet session or provide ownerWallet in request body)",
+        });
       }
 
       const protocol = ensureProtocol(body);
