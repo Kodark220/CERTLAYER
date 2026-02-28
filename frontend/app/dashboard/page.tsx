@@ -41,6 +41,7 @@ type ProtocolPreview = {
   website: string;
   protocolType: string;
   uptimeBps: number;
+  createdAt?: string;
 };
 
 const initialRegisterForm: RegisterForm = { id: "", name: "", website: "", protocolType: "rpc", uptimeBps: "9990" };
@@ -230,6 +231,7 @@ export default function DashboardPage() {
             website: item.website || "",
             protocolType: item.protocolType || "",
             uptimeBps: Number(item.uptimeBps || 0),
+            createdAt: item.createdAt || "",
           }));
           setProtocolOptions(mapped);
           const first = data.items[0];
@@ -240,6 +242,7 @@ export default function DashboardPage() {
             website: first.website || "",
             protocolType: first.protocolType || "",
             uptimeBps: Number(first.uptimeBps || 0),
+            createdAt: first.createdAt || "",
           });
         }
       } catch {
@@ -339,6 +342,7 @@ export default function DashboardPage() {
         website: data.protocol.website || "",
         protocolType: data.protocol.protocolType || "",
         uptimeBps: Number(data.protocol.uptimeBps || 0),
+        createdAt: data.protocol.createdAt || new Date().toISOString(),
       };
       setActiveProtocol(createdProtocol);
       setProtocolOptions((prev) => {
@@ -563,15 +567,30 @@ export default function DashboardPage() {
             {!canSeeInternalControls && hasRegisteredProtocol ? (
               <Card className="border-border/70 bg-card shadow-sm">
                 <CardHeader>
-                  <CardTitle>Protocol Registered</CardTitle>
+                  <div className="flex items-center justify-between gap-3">
+                    <CardTitle>Protocol Registered</CardTitle>
+                    <Badge className="bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/20">Active</Badge>
+                  </div>
                   <CardDescription>Your onboarding is complete. Commitment actions are managed by admins.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="grid gap-3 md:grid-cols-2">
                   <p className="text-sm text-muted-foreground">
                     Protocol: <span className="font-semibold text-foreground">{activeProtocol?.name || activeProtocolId}</span>
                   </p>
                   <p className="text-xs text-muted-foreground">
                     ID: <span className="font-mono">{activeProtocolId}</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Protocol Type: <span className="font-semibold text-foreground">{(activeProtocol?.protocolType || "unknown").toUpperCase()}</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Commitments: <span className="font-semibold text-foreground">{commitmentCount} added</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground md:col-span-2">
+                    Registered At:{" "}
+                    <span className="font-semibold text-foreground">
+                      {activeProtocol?.createdAt ? new Date(activeProtocol.createdAt).toLocaleString() : "N/A"}
+                    </span>
                   </p>
                 </CardContent>
               </Card>
