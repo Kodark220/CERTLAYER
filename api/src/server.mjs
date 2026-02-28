@@ -30,6 +30,7 @@ const ADMIN_WALLETS = new Set(
 const GENLAYER_RPC_URL = process.env.GENLAYER_RPC_URL || "https://studio.genlayer.com/api";
 const GENLAYER_CHAIN = (process.env.GENLAYER_CHAIN || "studionet").toLowerCase();
 const RAW_GENLAYER_CONTRACT_ADDRESS = process.env.GENLAYER_CONTRACT_ADDRESS || "";
+const RAW_GENLAYER_SECURITY_CONTRACT_ADDRESS = process.env.GENLAYER_SECURITY_CONTRACT_ADDRESS || "";
 const RAW_GENLAYER_SERVER_ACCOUNT = process.env.GENLAYER_SERVER_ACCOUNT || "";
 const RAW_GENLAYER_SERVER_PRIVATE_KEY = process.env.GENLAYER_SERVER_PRIVATE_KEY || "";
 
@@ -53,6 +54,10 @@ function parsePrivateKeyOrEmpty(raw, name) {
 }
 
 const GENLAYER_CONTRACT_ADDRESS = parseAddressOrEmpty(RAW_GENLAYER_CONTRACT_ADDRESS, "GENLAYER_CONTRACT_ADDRESS");
+const GENLAYER_SECURITY_CONTRACT_ADDRESS = parseAddressOrEmpty(
+  RAW_GENLAYER_SECURITY_CONTRACT_ADDRESS,
+  "GENLAYER_SECURITY_CONTRACT_ADDRESS"
+);
 const GENLAYER_SERVER_ACCOUNT = parseAddressOrEmpty(RAW_GENLAYER_SERVER_ACCOUNT, "GENLAYER_SERVER_ACCOUNT");
 const GENLAYER_SERVER_PRIVATE_KEY = parsePrivateKeyOrEmpty(
   RAW_GENLAYER_SERVER_PRIVATE_KEY,
@@ -70,6 +75,7 @@ if (GENLAYER_SERVER_PRIVATE_KEY && GENLAYER_SERVER_ACCOUNT) {
 }
 
 const LIVE_MODE = Boolean(GENLAYER_CONTRACT_ADDRESS);
+const SECURITY_LIVE_MODE = Boolean(GENLAYER_SECURITY_CONTRACT_ADDRESS);
 const WRITE_SIGNING_MODE = GENLAYER_SERVER_PRIVATE_KEY
   ? "private_key"
   : GENLAYER_SERVER_ACCOUNT
@@ -159,6 +165,11 @@ function hasAdminSession(req) {
   return Boolean(session && session.role === "admin");
 }
 
+function hasReadSession(req) {
+  if (hasInternalAccess(req)) return true;
+  return Boolean(getSession(req));
+}
+
 function canAccessWrite(req, pathname) {
   if (isPublicPostRoute(pathname)) return true;
   if (hasInternalAccess(req)) return true;
@@ -194,6 +205,13 @@ function buildClient(forWrite = false) {
 }
 
 async function contractWrite(functionName, args) {
+  return contractWriteTo(GENLAYER_CONTRACT_ADDRESS, functionName, args);
+}
+
+async function contractWriteTo(address, functionName, args) {
+  if (!address) {
+    throw new Error("contract address not configured");
+  }
   const client = buildClient(true);
   if (!GENLAYER_WRITE_ACCOUNT) {
     throw new Error(
@@ -202,7 +220,7 @@ async function contractWrite(functionName, args) {
   }
 
   const txHash = await client.writeContract({
-    address: GENLAYER_CONTRACT_ADDRESS,
+    address,
     functionName,
     args,
     value: BigInt(0),
@@ -216,6 +234,18 @@ async function contractWrite(functionName, args) {
   });
 
   return { txHash, receipt };
+}
+
+async function contractReadFrom(address, functionName, args = []) {
+  if (!address) {
+    throw new Error("contract address not configured");
+  }
+  const client = buildClient(false);
+  return client.readContract({
+    address,
+    functionName,
+    args,
+  });
 }
 
 const server = createServer(async (req, res) => {
@@ -235,8 +265,10 @@ const server = createServer(async (req, res) => {
         service: SERVICE_NAME,
         product: "CertLayer",
         live_mode: LIVE_MODE,
+        security_live_mode: SECURITY_LIVE_MODE,
         genlayer_chain: GENLAYER_CHAIN,
         genlayer_contract: GENLAYER_CONTRACT_ADDRESS || "",
+        genlayer_security_contract: GENLAYER_SECURITY_CONTRACT_ADDRESS || "",
         has_server_account: Boolean(GENLAYER_WRITE_ACCOUNT),
         has_server_private_key: Boolean(GENLAYER_SERVER_PRIVATE_KEY),
         write_signing_mode: WRITE_SIGNING_MODE,
@@ -847,6 +879,190 @@ const server = createServer(async (req, res) => {
       const owned = listProtocolsByOwnerWallet(session.wallet).map((p) => p.id);
       const items = db.incidents.filter((i) => owned.includes(i.protocolId));
       return send(res, 200, { items });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/security/analyze") {
+      const body = await readBody(req);
+      if (!body.txData || !body.txHash) {
+        return send(res, 400, { error: "txData and txHash required" });
+      }
+      if (!SECURITY_LIVE_MODE) {
+        return send(res, 400, { error: "security contract not configured" });
+      }
+      if (!(hasInternalAccess(req) || hasAdminSession(req))) {
+        return send(res, 403, { error: "admin session required" });
+      }
+      const onchain = await contractWriteTo(GENLAYER_SECURITY_CONTRACT_ADDRESS, "analyze_transaction", [
+        body.txData,
+        body.txHash,
+      ]);
+      return send(res, 200, { ok: true, onchain });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/security/escalate") {
+      const body = await readBody(req);
+      if (!body.txHash) return send(res, 400, { error: "txHash required" });
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!(hasInternalAccess(req) || hasAdminSession(req))) {
+        return send(res, 403, { error: "admin session required" });
+      }
+      const onchain = await contractWriteTo(GENLAYER_SECURITY_CONTRACT_ADDRESS, "escalate_analysis", [body.txHash]);
+      return send(res, 200, { ok: true, onchain });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/security/unpause") {
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!(hasInternalAccess(req) || hasAdminSession(req))) {
+        return send(res, 403, { error: "admin session required" });
+      }
+      const onchain = await contractWriteTo(GENLAYER_SECURITY_CONTRACT_ADDRESS, "unpause", []);
+      return send(res, 200, { ok: true, onchain });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/security/patterns/add") {
+      const body = await readBody(req);
+      if (!body.signature || !body.description) {
+        return send(res, 400, { error: "signature and description required" });
+      }
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!(hasInternalAccess(req) || hasAdminSession(req))) {
+        return send(res, 403, { error: "admin session required" });
+      }
+      const onchain = await contractWriteTo(GENLAYER_SECURITY_CONTRACT_ADDRESS, "add_attack_pattern", [
+        body.signature,
+        body.description,
+      ]);
+      return send(res, 201, { ok: true, onchain });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/security/protocols/register") {
+      const body = await readBody(req);
+      if (!body.protocolAddress) return send(res, 400, { error: "protocolAddress required" });
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!(hasInternalAccess(req) || hasAdminSession(req))) {
+        return send(res, 403, { error: "admin session required" });
+      }
+      const protocolAddress = getAddress(body.protocolAddress);
+      const onchain = await contractWriteTo(GENLAYER_SECURITY_CONTRACT_ADDRESS, "register_protocol", [protocolAddress]);
+      return send(res, 201, { ok: true, onchain });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/security/protocols/pause") {
+      const body = await readBody(req);
+      if (!body.protocolAddress || !body.reason) {
+        return send(res, 400, { error: "protocolAddress and reason required" });
+      }
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!(hasInternalAccess(req) || hasAdminSession(req))) {
+        return send(res, 403, { error: "admin session required" });
+      }
+      const protocolAddress = getAddress(body.protocolAddress);
+      const onchain = await contractWriteTo(GENLAYER_SECURITY_CONTRACT_ADDRESS, "pause_protocol", [
+        protocolAddress,
+        body.reason,
+        body.txHash || "",
+        Number(body.riskScore ?? 100),
+      ]);
+      return send(res, 200, { ok: true, onchain });
+    }
+
+    if (req.method === "POST" && pathname === "/v1/security/protocols/clear-pause") {
+      const body = await readBody(req);
+      if (!body.protocolAddress) return send(res, 400, { error: "protocolAddress required" });
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!(hasInternalAccess(req) || hasAdminSession(req))) {
+        return send(res, 403, { error: "admin session required" });
+      }
+      const protocolAddress = getAddress(body.protocolAddress);
+      const onchain = await contractWriteTo(GENLAYER_SECURITY_CONTRACT_ADDRESS, "clear_protocol_pause", [protocolAddress]);
+      return send(res, 200, { ok: true, onchain });
+    }
+
+    if (req.method === "GET" && pathname === "/v1/security/status") {
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!hasReadSession(req)) return send(res, 401, { error: "session required" });
+      const paused = await contractReadFrom(GENLAYER_SECURITY_CONTRACT_ADDRESS, "get_paused", []);
+      return send(res, 200, { paused: Boolean(paused) });
+    }
+
+    if (req.method === "GET" && pathname === "/v1/security/risk-score") {
+      const txHash = url.searchParams.get("txHash") || "";
+      if (!txHash) return send(res, 400, { error: "txHash required" });
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!hasReadSession(req)) return send(res, 401, { error: "session required" });
+      const score = await contractReadFrom(GENLAYER_SECURITY_CONTRACT_ADDRESS, "get_risk_score", [txHash]);
+      return send(res, 200, { txHash, score: Number(score ?? 0) });
+    }
+
+    if (req.method === "GET" && pathname === "/v1/security/tx-analysis") {
+      const txHash = url.searchParams.get("txHash") || "";
+      if (!txHash) return send(res, 400, { error: "txHash required" });
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!hasReadSession(req)) return send(res, 401, { error: "session required" });
+      const analysis = await contractReadFrom(GENLAYER_SECURITY_CONTRACT_ADDRESS, "get_tx_analysis_readable", [txHash]);
+      return send(res, 200, { txHash, analysis: String(analysis || "") });
+    }
+
+    if (req.method === "GET" && pathname === "/v1/security/recent-analyses") {
+      const count = Number(url.searchParams.get("count") || 10);
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!hasReadSession(req)) return send(res, 401, { error: "session required" });
+      const json = await contractReadFrom(GENLAYER_SECURITY_CONTRACT_ADDRESS, "get_recent_analyses", [count]);
+      let items = [];
+      try {
+        items = JSON.parse(String(json || "[]"));
+      } catch {
+        items = [];
+      }
+      return send(res, 200, { items });
+    }
+
+    if (req.method === "GET" && pathname === "/v1/security/events") {
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!hasReadSession(req)) return send(res, 401, { error: "session required" });
+      const items = await contractReadFrom(GENLAYER_SECURITY_CONTRACT_ADDRESS, "get_security_events", []);
+      return send(res, 200, { items: Array.isArray(items) ? items : [] });
+    }
+
+    if (req.method === "GET" && pathname === "/v1/security/patterns") {
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!hasReadSession(req)) return send(res, 401, { error: "session required" });
+      const items = await contractReadFrom(GENLAYER_SECURITY_CONTRACT_ADDRESS, "get_attack_patterns", []);
+      return send(res, 200, { items: Array.isArray(items) ? items : [] });
+    }
+
+    if (req.method === "GET" && pathname === "/v1/security/blacklist-status") {
+      const addressRaw = url.searchParams.get("address") || "";
+      if (!addressRaw) return send(res, 400, { error: "address required" });
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!hasReadSession(req)) return send(res, 401, { error: "session required" });
+      const address = getAddress(addressRaw);
+      const blacklisted = await contractReadFrom(
+        GENLAYER_SECURITY_CONTRACT_ADDRESS,
+        "is_address_blacklisted",
+        [address]
+      );
+      return send(res, 200, { address, blacklisted: Boolean(blacklisted) });
+    }
+
+    if (req.method === "GET" && pathname === "/v1/security/protocol-pause-status") {
+      const protocolAddressRaw = url.searchParams.get("protocolAddress") || "";
+      if (!protocolAddressRaw) return send(res, 400, { error: "protocolAddress required" });
+      if (!SECURITY_LIVE_MODE) return send(res, 400, { error: "security contract not configured" });
+      if (!hasReadSession(req)) return send(res, 401, { error: "session required" });
+      const protocolAddress = getAddress(protocolAddressRaw);
+      const pauseStatus = await contractReadFrom(
+        GENLAYER_SECURITY_CONTRACT_ADDRESS,
+        "get_protocol_pause_status",
+        [protocolAddress]
+      );
+      let status = {};
+      try {
+        status = JSON.parse(String(pauseStatus || "{}"));
+      } catch {
+        status = {};
+      }
+      return send(res, 200, { protocolAddress, ...status });
     }
 
     if (req.method === "POST" && pathname === "/v1/pools/deposit") {
