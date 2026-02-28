@@ -104,15 +104,6 @@ export default function Navbar() {
                     </div>
                     <button
                       onClick={() => {
-                        setOpen(false);
-                        router.push("/dashboard");
-                      }}
-                      className="mb-2 w-full rounded-lg bg-[#2A76F6] px-3 py-2 text-sm font-semibold hover:bg-[#1f63d5]"
-                    >
-                      Open Dashboard
-                    </button>
-                    <button
-                      onClick={() => {
                         disconnect();
                         setOpen(false);
                       }}
