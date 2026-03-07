@@ -82,7 +82,7 @@ Use `pattern_updater.py` to fetch attack patterns from web feeds and submit vett
 - Text lines: `signature|description|confidence`
 
 ### Environment variables
-- `GENLAYER_RPC_URL` RPC endpoint
+- `GENLAYER_RPC_URL` RPC endpoint (use `https://studio.genlayer.com/api` on StudioNet)
 - `GENLAYER_CONTRACT` HackDetection contract address
 - `GENLAYER_FROM` optional sender address for write txs
 - `GENLAYER_API_KEY` optional API key

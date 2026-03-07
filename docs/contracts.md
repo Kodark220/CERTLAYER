@@ -1,54 +1,103 @@
-# GenLayer Contract Blueprint
+# GenLayer Contracts in CERTLAYER
 
-## Contract Set
+This repo currently uses two primary GenLayer contracts that together implement CERTLAYER’s offering:
 
-1. `RegistryContract`
-- protocol registration
-- wallet authorization
-- SLA versioning + notice period
-- protocol status lifecycle
+1. `contracts/genlayer/certlayer_contract.py` (reliability + compensation + reputation + commitments)
+2. `contracts/genlayer/hack_detection_contract.py` (security detection + emergency controls + pause signaling)
 
-2. `MonitoringDecisionContract`
-- incident attestations
-- evidence commitments
-- verification decisions
+## 1) CERTLAYER Contract (`certlayer_contract.py`)
 
-3. `CoveragePoolContract`
-- pool deposits/withdrawals under policy constraints
-- compensation execution
-- enforcement accounting
+Primary scope:
+- protocol registration and owner mapping
+- incident creation, verification, challenge, and finalization
+- payout execution and recovery distribution
+- commitment tracking and compliance status
+- pool accounting and reputation scoring interfaces
 
-4. `ReputationContract`
-- deterministic score aggregation from on-chain events
-- score snapshots
-- public read interfaces
-
-## Minimal V1 Interface
-
-### Registry
+Representative write methods:
 - `register_protocol(...)`
-- `add_authorized_wallet(...)`
-- `schedule_sla_update(...)`
-- `activate_sla_update(...)`
-- `get_protocol(protocol_id)`
-
-### Monitoring
+- `set_protocol_status(...)`
 - `submit_incident_candidate(...)`
 - `submit_verification_decision(...)`
-- `get_incident(incident_id)`
+- `create_incident(...)`
+- `create_security_incident(...)`
+- `attach_affected_users(...)`
+- `open_challenge_window(...)`
+- `finalize_incident(...)`
+- `execute_payout_batch(...)`
+- `register_commitment(...)`
+- `evaluate_commitment(...)`
+- `finalize_commitment(...)`
+- `deposit(...)`
+- `execute_compensation(...)`
+- `recompute_score(...)`
 
-### Coverage
-- `deposit(protocol_id, amount)`
-- `execute_compensation(incident_id, recipients[], amounts[])`
-- `get_pool_state(protocol_id)`
+Representative read methods:
+- `get_protocol_metadata(...)`
+- `get_protocol_owner_wallet(...)`
+- `get_protocol_status(...)`
+- `get_incident_status(...)`
+- `get_incident_type(...)`
+- `get_incident_total_amount(...)`
+- `get_pool_balance(...)`
+- `get_score(...)`
+- `get_grade(...)`
 
-### Reputation
-- `recompute_score(protocol_id)`
-- `get_score(protocol_id)`
-- `get_score_history(protocol_id)`
+## 2) HackDetection Contract (`hack_detection_contract.py`)
+
+Primary scope:
+- suspicious transaction analysis
+- risk scoring and threat escalation
+- emergency pause/circuit-breaker behavior
+- blacklisting and security event history
+- protocol pause signaling for integrated contracts
+
+Representative write methods:
+- `analyze_transaction(...)`
+- `escalate_analysis(...)`
+- `add_attack_pattern(...)`
+- `fetch_patterns_from_source(...)`
+- `set_thresholds(...)`
+- `register_protocol(...)`
+- `pause_protocol(...)`
+- `clear_protocol_pause(...)`
+- `unpause(...)`
+
+Representative admin/role methods:
+- `add_admin(...)`
+- `remove_admin(...)`
+- `set_role(...)`
+- `get_role(...)`
+
+Representative read methods:
+- `should_pause_protocol(...)`
+- `get_protocol_pause_status(...)`
+- `get_risk_score(...)`
+- `get_tx_analysis(...)`
+- `is_address_blacklisted(...)`
+- `get_security_events(...)`
+
+## Integration Model
+
+CERTLAYER treats HackDetection as an integrated capability, not a separate product:
+
+- reliability incidents and security incidents both feed protocol trust posture
+- emergency pause signals can be consumed by protocol guard checks
+- admin/security operators use role-gated controls to manage incidents and threat response
+- public consumers see reputation/reliability outcomes without internal control surfaces
+
+## Important Constraint
+
+HackDetection pause signaling is advisory unless integrated:
+
+- protocol contract must check `should_pause_protocol(address(this))`, or
+- automation must call the protocol’s own pause function.
+
+Without one of these, protocol execution will not stop automatically.
 
 ## Trust Requirements
 
-- Decision inputs must include source references and evidence hash.
-- Replay and duplicate enforcement must be prevented by incident idempotency checks.
-- Coverage underflow must hard-fail enforcement and mark protocol as underfunded.
+- multi-source evidence for incident/security decisions
+- idempotent incident handling to prevent duplicate enforcement
+- explicit challenge/dispute windows before final payout paths
+- hard-fail enforcement when pool/accounting constraints are not met
