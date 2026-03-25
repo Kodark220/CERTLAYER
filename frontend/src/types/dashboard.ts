@@ -12,6 +12,7 @@ export type RegisterForm = {
   id: string;
   name: string;
   website: string;
+  contractAddress: string;
   protocolType: string;
   uptimeBps: string;
 };
@@ -59,4 +60,8 @@ export type SecurityForm = {
   poolAdequacy: string;
   postMortemQuality: string;
   recoveryEffort: string;
+  hackDetectionAddress: string;
+  analyzeTxData: string;
+  analyzeTxHash: string;
+  riskScoreTxHash: string;
 };

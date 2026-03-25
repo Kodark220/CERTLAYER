@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
 import { createClient } from "genlayer-js";
-import { localnet, studionet } from "genlayer-js/chains";
+import { localnet, testnetBradbury } from "genlayer-js/chains";
 import { getAddress, recoverMessageAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
@@ -12,6 +12,7 @@ import {
   findProtocol,
   listCommitmentsByProtocol,
   listProtocolsByOwnerWallet,
+  recordEnforcement,
   upsertCommitment,
   updateProtocol,
   upsertScore,
@@ -27,8 +28,8 @@ const ADMIN_WALLETS = new Set(
     .filter(Boolean)
 );
 
-const GENLAYER_RPC_URL = process.env.GENLAYER_RPC_URL || "https://studio.genlayer.com/api";
-const GENLAYER_CHAIN = (process.env.GENLAYER_CHAIN || "studionet").toLowerCase();
+const GENLAYER_RPC_URL = process.env.GENLAYER_RPC_URL || "https://rpc-bradbury.genlayer.com";
+const GENLAYER_CHAIN = (process.env.GENLAYER_CHAIN || "testnet-bradbury").toLowerCase();
 const RAW_GENLAYER_CONTRACT_ADDRESS = process.env.GENLAYER_CONTRACT_ADDRESS || "";
 const RAW_GENLAYER_SECURITY_CONTRACT_ADDRESS = process.env.GENLAYER_SECURITY_CONTRACT_ADDRESS || "";
 const RAW_GENLAYER_SERVER_ACCOUNT = process.env.GENLAYER_SERVER_ACCOUNT || "";
@@ -117,6 +118,12 @@ function normalizeWallet(wallet) {
   return wallet.toLowerCase();
 }
 
+function parseProtocolAddressOrEmpty(raw) {
+  const value = (raw || "").trim();
+  if (!value) return "";
+  return getAddress(value);
+}
+
 function isAdminWallet(wallet) {
   return ADMIN_WALLETS.has(normalizeWallet(wallet));
 }
@@ -195,7 +202,7 @@ function enforceProtocolOwnership(req, protocolId) {
 
 function buildClient(forWrite = false) {
   const cfg = {
-    chain: GENLAYER_CHAIN === "localnet" ? localnet : studionet,
+    chain: GENLAYER_CHAIN === "localnet" ? localnet : testnetBradbury,
     endpoint: GENLAYER_RPC_URL,
   };
   if (forWrite && GENLAYER_WRITE_ACCOUNT) {
@@ -246,6 +253,102 @@ async function contractReadFrom(address, functionName, args = []) {
     functionName,
     args,
   });
+}
+
+async function getProtocolPauseStatusFromAddress(protocolAddress) {
+  if (!SECURITY_LIVE_MODE || !protocolAddress) {
+    return { registered: false, paused: false, reason: "", tx_hash: "" };
+  }
+
+  const pauseStatus = await contractReadFrom(
+    GENLAYER_SECURITY_CONTRACT_ADDRESS,
+    "get_protocol_pause_status",
+    [protocolAddress]
+  );
+
+  try {
+    return JSON.parse(String(pauseStatus || "{}"));
+  } catch {
+    return { registered: false, paused: false, reason: "", tx_hash: "" };
+  }
+}
+
+async function enforceProtocolGuard(req, protocolId) {
+  if (hasInternalAccess(req) || hasAdminSession(req)) {
+    return { ok: true };
+  }
+
+  const protocol = findProtocol(protocolId);
+  if (!protocol) {
+    return { ok: false, status: 404, error: "protocol not found" };
+  }
+
+  if (!protocol.contractAddress) {
+    return { ok: true };
+  }
+
+  const pauseStatus = await getProtocolPauseStatusFromAddress(protocol.contractAddress);
+  if (pauseStatus.paused) {
+    return {
+      ok: false,
+      status: 423,
+      error: "protocol paused by HackDetection",
+      pauseStatus,
+    };
+  }
+
+  return { ok: true, pauseStatus };
+}
+
+async function getProtocolSummary(protocolId) {
+  const protocol = findProtocol(protocolId);
+  if (!protocol) return null;
+
+  const localScore = db.scores.find((item) => item.protocolId === protocolId) || {
+    score: 0,
+    grade: "N/A",
+    updatedAt: null,
+  };
+  const incidents = db.incidents.filter((item) => item.protocolId === protocolId);
+  const commitments = db.commitments.filter((item) => item.protocolId === protocolId);
+  const paidCompensation = Number(protocol.compensationPaidUsdc || 0);
+
+  let onchainScore = null;
+  let onchainGrade = null;
+  let onchainPoolBalance = null;
+  if (LIVE_MODE) {
+    try {
+      const [scoreRaw, grade, poolBalance] = await Promise.all([
+        contractReadFrom(GENLAYER_CONTRACT_ADDRESS, "get_score", [protocolId]),
+        contractReadFrom(GENLAYER_CONTRACT_ADDRESS, "get_grade", [protocolId]),
+        contractReadFrom(GENLAYER_CONTRACT_ADDRESS, "get_pool_balance", [protocolId]),
+      ]);
+      onchainScore = Number(scoreRaw ?? 0);
+      onchainGrade = String(grade || "N/A");
+      onchainPoolBalance = Number(poolBalance ?? 0);
+    } catch {
+      onchainScore = null;
+      onchainGrade = null;
+      onchainPoolBalance = null;
+    }
+  }
+
+  const pauseStatus = await getProtocolPauseStatusFromAddress(protocol.contractAddress || "");
+
+  return {
+    protocol,
+    metrics: {
+      coveragePoolUsdc: onchainPoolBalance ?? Number(protocol.coveragePoolUsdc || 0),
+      compensationPaidUsdc: paidCompensation,
+      reputationScore: onchainScore ?? Number(localScore.score || 0),
+      reputationGrade: onchainGrade ?? localScore.grade,
+      incidentCount: incidents.length,
+      openIncidentCount: incidents.filter((item) => item.status !== "paid" && item.status !== "finalized").length,
+      commitmentCount: commitments.length,
+      pauseStatus,
+      scoreUpdatedAt: localScore.updatedAt,
+    },
+  };
 }
 
 const server = createServer(async (req, res) => {
@@ -398,6 +501,9 @@ const server = createServer(async (req, res) => {
         });
       }
 
+      const protocolAddress = parseProtocolAddressOrEmpty(body.contractAddress || "");
+      body.contractAddress = protocolAddress;
+
       const protocol = ensureProtocol(body);
       upsertScore(protocol.id, 100, "AAA");
 
@@ -409,8 +515,22 @@ const server = createServer(async (req, res) => {
           uptimeBps: protocol.uptimeBps,
         });
         const ownerWallet = body.ownerWallet || "";
-        const onchain = await contractWrite("register_protocol", [protocol.id, metadataJson, ownerWallet]);
-        return send(res, 201, { protocol, onchain });
+        const onchain = await contractWrite("register_protocol", [protocol.id, metadataJson, ownerWallet, protocolAddress]);
+        let securityRegistration = null;
+        if (SECURITY_LIVE_MODE && protocolAddress) {
+          try {
+            securityRegistration = await contractWriteTo(
+              GENLAYER_SECURITY_CONTRACT_ADDRESS,
+              "register_protocol",
+              [protocolAddress]
+            );
+          } catch (error) {
+            securityRegistration = {
+              error: error instanceof Error ? error.message : String(error),
+            };
+          }
+        }
+        return send(res, 201, { protocol, onchain, securityRegistration });
       }
 
       return send(res, 201, { protocol, mode: "local" });
@@ -421,13 +541,27 @@ const server = createServer(async (req, res) => {
       const authz = enforceProtocolOwnership(req, body.protocolId);
       if (!authz.ok) return send(res, authz.status, { error: authz.error });
 
+      const guard = await enforceProtocolGuard(req, body.protocolId);
+      if (!guard.ok) return send(res, guard.status, { error: guard.error, pauseStatus: guard.pauseStatus });
+
+      const protocolAddress = body.contractAddress !== undefined
+        ? parseProtocolAddressOrEmpty(body.contractAddress)
+        : undefined;
+
       const updated = updateProtocol(body.protocolId, {
         name: body.name,
         website: body.website,
         protocolType: body.protocolType,
         uptimeBps: body.uptimeBps,
+        contractAddress: protocolAddress,
       });
-      return send(res, 200, { protocol: updated });
+
+      let onchain = null;
+      if (LIVE_MODE && protocolAddress !== undefined) {
+        onchain = await contractWrite("set_protocol_contract_address", [body.protocolId, protocolAddress || ""]);
+      }
+
+      return send(res, 200, { protocol: updated, onchain });
     }
 
     if (req.method === "GET" && pathname === "/v1/protocols") {
@@ -437,6 +571,18 @@ const server = createServer(async (req, res) => {
       const session = getSession(req);
       if (!session) return send(res, 401, { error: "session required" });
       return send(res, 200, { items: listProtocolsByOwnerWallet(session.wallet) });
+    }
+
+    if (req.method === "GET" && pathname === "/v1/protocols/summary") {
+      const protocolId = url.searchParams.get("protocolId") || "";
+      if (!protocolId) return send(res, 400, { error: "protocolId required" });
+
+      const authz = enforceProtocolOwnership(req, protocolId);
+      if (!authz.ok) return send(res, authz.status, { error: authz.error });
+
+      const summary = await getProtocolSummary(protocolId);
+      if (!summary) return send(res, 404, { error: "protocol not found" });
+      return send(res, 200, summary);
     }
 
     if (req.method === "GET" && pathname === "/v1/commitments") {
@@ -745,6 +891,8 @@ const server = createServer(async (req, res) => {
       const asset = typeof body.asset === "string" && body.asset.trim() ? body.asset.trim().toUpperCase() : "USDC";
       const authz = enforceProtocolOwnership(req, body.protocolId);
       if (!authz.ok) return send(res, authz.status, { error: authz.error });
+      const guard = await enforceProtocolGuard(req, body.protocolId);
+      if (!guard.ok) return send(res, guard.status, { error: guard.error, pauseStatus: guard.pauseStatus });
 
       const commitment = upsertCommitment({
         protocolId: body.protocolId,
@@ -782,6 +930,8 @@ const server = createServer(async (req, res) => {
       }
       const authz = enforceProtocolOwnership(req, body.protocolId);
       if (!authz.ok) return send(res, authz.status, { error: authz.error });
+      const guard = await enforceProtocolGuard(req, body.protocolId);
+      if (!guard.ok) return send(res, guard.status, { error: guard.error, pauseStatus: guard.pauseStatus });
       const nowTs = Math.floor(Date.now() / 1000);
 
       const commitment = upsertCommitment({
@@ -812,6 +962,8 @@ const server = createServer(async (req, res) => {
       }
       const authz = enforceProtocolOwnership(req, body.protocolId);
       if (!authz.ok) return send(res, authz.status, { error: authz.error });
+      const guard = await enforceProtocolGuard(req, body.protocolId);
+      if (!guard.ok) return send(res, guard.status, { error: guard.error, pauseStatus: guard.pauseStatus });
 
       const commitment = upsertCommitment({
         protocolId: body.protocolId,
@@ -838,6 +990,8 @@ const server = createServer(async (req, res) => {
       }
       const authz = enforceProtocolOwnership(req, body.protocolId);
       if (!authz.ok) return send(res, authz.status, { error: authz.error });
+      const guard = await enforceProtocolGuard(req, body.protocolId);
+      if (!guard.ok) return send(res, guard.status, { error: guard.error, pauseStatus: guard.pauseStatus });
       const nowTs = Math.floor(Date.now() / 1000);
 
       const commitment = upsertCommitment({
@@ -1101,9 +1255,11 @@ const server = createServer(async (req, res) => {
           body.protocolId,
           Number(body.totalAmount),
         ]);
+        recordEnforcement(body.protocolId, body.incidentId, Number(body.totalAmount), String(onchain.txHash || ""));
         return send(res, 200, { ok: true, onchain });
       }
 
+      recordEnforcement(body.protocolId, body.incidentId, Number(body.totalAmount));
       return send(res, 200, { ok: true, mode: "local" });
     }
 
@@ -1117,9 +1273,9 @@ const server = createServer(async (req, res) => {
       const incident = Number(body.incidentComponent ?? 7000);
       const response = Number(body.responseComponent ?? 7000);
       const poolHealth = Number(body.poolHealthComponent ?? 7000);
-      const score = Math.round((uptime + incident + response + poolHealth) / 4 / 100);
-      const grade = score >= 90 ? "AAA" : score >= 80 ? "AA" : score >= 70 ? "A" : score >= 60 ? "B" : "C";
-      const localScore = upsertScore(body.protocolId, score, grade);
+      const rawScore = Math.round((uptime + incident + response + poolHealth) / 4);
+      const grade = rawScore >= 9000 ? "AAA" : rawScore >= 8000 ? "AA" : rawScore >= 7000 ? "A" : rawScore >= 6000 ? "B" : "C";
+      const localScore = upsertScore(body.protocolId, rawScore, grade);
 
       if (LIVE_MODE) {
         const onchain = await contractWrite("recompute_score", [

@@ -21,6 +21,7 @@ import { SecurityRecoverySection } from "@/src/components/dashboard/SecurityReco
 import { UptimeChart } from "@/src/components/dashboard/UptimeChart";
 import { PageHeader } from "@/src/components/layout/PageHeader";
 import { PageShell } from "@/src/components/layout/PageShell";
+import Navbar from "@/components/Navbar";
 
 import type { AuthSession, CommitmentForm, LifecycleForm, RegisterForm, SecurityForm } from "@/src/types/dashboard";
 
@@ -43,13 +44,41 @@ type ProtocolPreview = {
   id: string;
   name: string;
   website: string;
+  contractAddress?: string;
   protocolType: string;
   uptimeBps: number;
   coveragePoolUsdc?: number;
+  compensationPaidUsdc?: number;
   createdAt?: string;
 };
 
-const initialRegisterForm: RegisterForm = { id: "", name: "", website: "", protocolType: "rpc", uptimeBps: "9990" };
+type ProtocolSummary = {
+  protocol: ProtocolPreview;
+  metrics: {
+    coveragePoolUsdc: number;
+    compensationPaidUsdc: number;
+    reputationScore: number;
+    reputationGrade: string;
+    incidentCount: number;
+    openIncidentCount: number;
+    commitmentCount: number;
+    pauseStatus: {
+      registered?: boolean;
+      paused?: boolean;
+      reason?: string;
+      tx_hash?: string;
+    };
+  };
+};
+
+const initialRegisterForm: RegisterForm = {
+  id: "",
+  name: "",
+  website: "",
+  contractAddress: "",
+  protocolType: "rpc",
+  uptimeBps: "9990",
+};
 
 const initialLifecycleForm: LifecycleForm = {
   incidentId: "",
@@ -94,6 +123,10 @@ const initialSecurityForm: SecurityForm = {
   poolAdequacy: "0",
   postMortemQuality: "0",
   recoveryEffort: "0",
+  hackDetectionAddress: "",
+  analyzeTxData: "",
+  analyzeTxHash: "",
+  riskScoreTxHash: "",
 };
 
 function MetricCard({ label, value, meta }: { label: string; value: string; meta?: string }) {
@@ -146,6 +179,7 @@ export default function DashboardPage() {
   const [registerTxHash, setRegisterTxHash] = useState("");
   const [activeProtocolId, setActiveProtocolId] = useState("");
   const [activeProtocol, setActiveProtocol] = useState<ProtocolPreview | null>(null);
+  const [protocolSummary, setProtocolSummary] = useState<ProtocolSummary | null>(null);
   const [protocolOptions, setProtocolOptions] = useState<ProtocolPreview[]>([]);
   const [commitmentItems, setCommitmentItems] = useState<CommitmentPreview[]>([]);
   const [commitmentsLoading, setCommitmentsLoading] = useState(false);
@@ -169,6 +203,9 @@ export default function DashboardPage() {
   const [securityLoading, setSecurityLoading] = useState(false);
   const [securityError, setSecurityError] = useState("");
   const [securityLog, setSecurityLog] = useState<string[]>([]);
+  const [securityStatus, setSecurityStatus] = useState<{ paused: boolean } | null>(null);
+  const [riskScoreResult, setRiskScoreResult] = useState<{ txHash: string; score: number } | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<{ txHash: string; analysis: string } | null>(null);
 
   const canSeeInternalControls = useMemo(() => session?.role === "admin", [session]);
   const hasRegisteredProtocol = useMemo(() => Boolean(activeProtocolId), [activeProtocolId]);
@@ -180,30 +217,29 @@ export default function DashboardPage() {
     return Math.min(100, Math.max(95, parsed / 100));
   }, [activeProtocol]);
   const reputationSummary = useMemo(() => {
-    if (!hasRegisteredProtocol || commitmentCount === 0) {
-      return { value: "100 (AAA)", meta: "New protocol baseline" };
+    if (!protocolSummary) {
+      return { value: "Pending", meta: "Load a protocol to view canonical metrics" };
     }
-
-    const hasMissed = commitmentItems.some((item) => item.result === "missed");
-    const hasPartial = commitmentItems.some((item) => item.result === "partial");
-    const score = hasMissed ? 85 : hasPartial ? 92 : 98;
-    const grade = score >= 90 ? "AAA" : score >= 80 ? "AA" : "A";
+    const rawScore = Number(protocolSummary.metrics.reputationScore || 0);
+    const normalizedScore = rawScore > 100 ? rawScore / 100 : rawScore;
     return {
-      value: `${score} (${grade})`,
-      meta: `Based on ${commitmentCount} commitment${commitmentCount === 1 ? "" : "s"}`,
+      value: `${normalizedScore.toFixed(0)} (${protocolSummary.metrics.reputationGrade || "N/A"})`,
+      meta: `${protocolSummary.metrics.incidentCount} incident(s), ${protocolSummary.metrics.commitmentCount} commitment(s)`,
     };
-  }, [hasRegisteredProtocol, commitmentCount, commitmentItems]);
+  }, [protocolSummary]);
   const coverageSummary = useMemo(() => {
-    const value = Number(activeProtocol?.coveragePoolUsdc || 0);
+    const value = Number(protocolSummary?.metrics.coveragePoolUsdc || 0);
     if (value <= 0) return { value: "Empty", meta: "No funds yet" };
     return { value: `${value.toLocaleString()} USDC`, meta: "Funded pool" };
-  }, [activeProtocol]);
+  }, [protocolSummary]);
   const compensationSummary = useMemo(
     () => ({
-      value: "0 USDC",
-      meta: commitmentCount > 0 ? `${commitmentCount} commitment${commitmentCount === 1 ? "" : "s"} tracked` : "No commitments yet",
+      value: `${Number(protocolSummary?.metrics.compensationPaidUsdc || 0).toLocaleString()} USDC`,
+      meta: protocolSummary?.metrics.pauseStatus?.paused
+        ? `Paused: ${protocolSummary.metrics.pauseStatus.reason || "HackDetection signal active"}`
+        : `${protocolSummary?.metrics.openIncidentCount || 0} open incident(s)`,
     }),
-    [commitmentCount]
+    [protocolSummary]
   );
 
   useEffect(() => {
@@ -241,9 +277,11 @@ export default function DashboardPage() {
             id: item.id || "",
             name: item.name || "",
             website: item.website || "",
+            contractAddress: item.contractAddress || "",
             protocolType: item.protocolType || "",
             uptimeBps: Number(item.uptimeBps || 0),
             coveragePoolUsdc: Number(item.coveragePoolUsdc || 0),
+            compensationPaidUsdc: Number(item.compensationPaidUsdc || 0),
             createdAt: item.createdAt || "",
           }));
           setProtocolOptions(mapped);
@@ -253,9 +291,11 @@ export default function DashboardPage() {
             id: first.id || "",
             name: first.name || "",
             website: first.website || "",
+            contractAddress: first.contractAddress || "",
             protocolType: first.protocolType || "",
             uptimeBps: Number(first.uptimeBps || 0),
             coveragePoolUsdc: Number(first.coveragePoolUsdc || 0),
+            compensationPaidUsdc: Number(first.compensationPaidUsdc || 0),
             createdAt: first.createdAt || "",
           });
         }
@@ -264,6 +304,46 @@ export default function DashboardPage() {
       }
     }
     void loadProtocolsForSession();
+  }, [session, activeProtocolId]);
+
+  useEffect(() => {
+    async function loadProtocolSummary() {
+      if (!session || !activeProtocolId) {
+        setProtocolSummary(null);
+        return;
+      }
+
+      try {
+        const res = await getJson(`/v1/protocols/summary?protocolId=${encodeURIComponent(activeProtocolId)}`, session.token);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load protocol summary");
+        setProtocolSummary(data);
+        if (data?.protocol) {
+          setActiveProtocol((prev) => ({
+            ...(prev || {}),
+            ...data.protocol,
+            coveragePoolUsdc: Number(data.metrics?.coveragePoolUsdc || data.protocol.coveragePoolUsdc || 0),
+            compensationPaidUsdc: Number(data.metrics?.compensationPaidUsdc || data.protocol.compensationPaidUsdc || 0),
+          } as ProtocolPreview));
+          setProtocolOptions((prev) =>
+            prev.map((item) =>
+              item.id === data.protocol.id
+                ? {
+                    ...item,
+                    ...data.protocol,
+                    coveragePoolUsdc: Number(data.metrics?.coveragePoolUsdc || item.coveragePoolUsdc || 0),
+                    compensationPaidUsdc: Number(data.metrics?.compensationPaidUsdc || item.compensationPaidUsdc || 0),
+                  }
+                : item
+            )
+          );
+        }
+      } catch {
+        setProtocolSummary(null);
+      }
+    }
+
+    void loadProtocolSummary();
   }, [session, activeProtocolId]);
 
   useEffect(() => {
@@ -340,6 +420,7 @@ export default function DashboardPage() {
           id: registerForm.id || undefined,
           name: registerForm.name,
           website: registerForm.website,
+          contractAddress: registerForm.contractAddress,
           protocolType: registerForm.protocolType,
           uptimeBps: Number(registerForm.uptimeBps),
         },
@@ -354,9 +435,11 @@ export default function DashboardPage() {
         id: data.protocol.id,
         name: data.protocol.name || "",
         website: data.protocol.website || "",
+        contractAddress: data.protocol.contractAddress || "",
         protocolType: data.protocol.protocolType || "",
         uptimeBps: Number(data.protocol.uptimeBps || 0),
         coveragePoolUsdc: Number(data.protocol.coveragePoolUsdc || 0),
+        compensationPaidUsdc: Number(data.protocol.compensationPaidUsdc || 0),
         createdAt: data.protocol.createdAt || new Date().toISOString(),
       };
       setActiveProtocol(createdProtocol);
@@ -368,7 +451,7 @@ export default function DashboardPage() {
         return [createdProtocol, ...prev];
       });
       setRegisterTxHash(data.onchain?.txHash || "");
-      setRegisterForm((prev) => ({ ...prev, id: "" }));
+      setRegisterForm((prev) => ({ ...initialRegisterForm, id: "" }));
     } catch (e) {
       setRegisterError(e instanceof Error ? e.message : "Registration failed");
     } finally {
@@ -393,6 +476,7 @@ export default function DashboardPage() {
         `Wallet: ${wallet}`,
         `Protocol: ${registerForm.name || "(unnamed)"}`,
         `Website: ${registerForm.website || "(none)"}`,
+        `Protected Contract: ${registerForm.contractAddress || "(not set)"}`,
         `Type: ${registerForm.protocolType}`,
         `Uptime BPS: ${registerForm.uptimeBps}`,
         `Timestamp: ${new Date().toISOString()}`,
@@ -481,6 +565,84 @@ export default function DashboardPage() {
     }
   }
 
+  async function registerHackDetection() {
+    if (!session || !canSeeInternalControls) return setSecurityError("Admin session required.");
+    const addr = securityForm.hackDetectionAddress.trim();
+    if (!addr) return setSecurityError("Enter a protocol contract address.");
+    setSecurityError("");
+    setSecurityLoading(true);
+    try {
+      const res = await postJson("/v1/security/protocols/register", { protocolAddress: addr }, session.token);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Registration failed");
+      const tx = data.onchain?.txHash ? ` tx=${data.onchain.txHash}` : "";
+      setSecurityLog((prev) => [`Hack Detection registered: ${addr}${tx}`, ...prev].slice(0, 20));
+    } catch (e) {
+      setSecurityError(e instanceof Error ? e.message : "Registration failed");
+    } finally {
+      setSecurityLoading(false);
+    }
+  }
+
+  async function analyzeTransaction() {
+    if (!session || !canSeeInternalControls) return setSecurityError("Admin session required.");
+    const { analyzeTxData, analyzeTxHash } = securityForm;
+    if (!analyzeTxData.trim() || !analyzeTxHash.trim()) return setSecurityError("Transaction data and hash are required.");
+    setSecurityError("");
+    setSecurityLoading(true);
+    try {
+      const res = await postJson("/v1/security/analyze", { txData: analyzeTxData, txHash: analyzeTxHash }, session.token);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Analysis failed");
+      const tx = data.onchain?.txHash ? ` tx=${data.onchain.txHash}` : "";
+      setSecurityLog((prev) => [`Analyzed ${analyzeTxHash}${tx}`, ...prev].slice(0, 20));
+      // Fetch the analysis result
+      const analysisRes = await getJson(`/v1/security/tx-analysis?txHash=${encodeURIComponent(analyzeTxHash)}`, session.token);
+      if (analysisRes.ok) {
+        const analysisData = await analysisRes.json();
+        setAnalysisResult({ txHash: analyzeTxHash, analysis: analysisData.analysis || "" });
+      }
+    } catch (e) {
+      setSecurityError(e instanceof Error ? e.message : "Analysis failed");
+    } finally {
+      setSecurityLoading(false);
+    }
+  }
+
+  async function checkRiskScore() {
+    if (!session) return setSecurityError("Please sign in first.");
+    const txHash = securityForm.riskScoreTxHash.trim();
+    if (!txHash) return setSecurityError("Enter a transaction hash.");
+    setSecurityError("");
+    setSecurityLoading(true);
+    try {
+      const res = await getJson(`/v1/security/risk-score?txHash=${encodeURIComponent(txHash)}`, session.token);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to fetch risk score");
+      setRiskScoreResult({ txHash, score: Number(data.score ?? 0) });
+    } catch (e) {
+      setSecurityError(e instanceof Error ? e.message : "Failed to fetch risk score");
+    } finally {
+      setSecurityLoading(false);
+    }
+  }
+
+  async function checkSecurityStatus() {
+    if (!session) return setSecurityError("Please sign in first.");
+    setSecurityError("");
+    setSecurityLoading(true);
+    try {
+      const res = await getJson("/v1/security/status", session.token);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to fetch status");
+      setSecurityStatus({ paused: Boolean(data.paused) });
+    } catch (e) {
+      setSecurityError(e instanceof Error ? e.message : "Failed to fetch status");
+    } finally {
+      setSecurityLoading(false);
+    }
+  }
+
   async function submitPoolDeposit() {
     if (!session) return setPoolDepositError("Please sign in first.");
     if (!activeProtocolId) return setPoolDepositError("Register/select a protocol first.");
@@ -518,6 +680,15 @@ export default function DashboardPage() {
         if (!prev) return prev;
         return { ...prev, coveragePoolUsdc: updatedPool };
       });
+      setProtocolSummary((prev) =>
+        prev && prev.protocol.id === activeProtocolId
+          ? {
+              ...prev,
+              protocol: { ...prev.protocol, coveragePoolUsdc: updatedPool },
+              metrics: { ...prev.metrics, coveragePoolUsdc: updatedPool },
+            }
+          : prev
+      );
       setProtocolOptions((prev) =>
         prev.map((protocol) =>
           protocol.id === activeProtocolId ? { ...protocol, coveragePoolUsdc: updatedPool } : protocol
@@ -534,6 +705,8 @@ export default function DashboardPage() {
 
   if (!sessionReady) {
     return (
+      <>
+      <Navbar />
       <PageShell>
         <Card>
           <CardContent className="pt-6">
@@ -541,11 +714,14 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </PageShell>
+      </>
     );
   }
 
   if (!session) {
     return (
+      <>
+      <Navbar />
       <PageShell>
         <Card>
           <CardHeader>
@@ -562,10 +738,13 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </PageShell>
+      </>
     );
   }
 
   return (
+    <>
+    <Navbar />
     <PageShell>
       <PageHeader
         title="Protocol Dashboard"
@@ -650,7 +829,13 @@ export default function DashboardPage() {
                     Protocol Type: <span className="font-semibold text-foreground">{(activeProtocol?.protocolType || "unknown").toUpperCase()}</span>
                   </p>
                   <p className="text-sm text-muted-foreground">
+                    Guard Status: <span className="font-semibold text-foreground">{protocolSummary?.metrics.pauseStatus?.paused ? "Paused" : "Clear"}</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground">
                     Commitments: <span className="font-semibold text-foreground">{commitmentCount} added</span>
+                  </p>
+                  <p className="text-sm text-muted-foreground md:col-span-2">
+                    Protected Contract: <span className="font-mono text-foreground">{activeProtocol?.contractAddress || "Not registered"}</span>
                   </p>
                   <p className="text-sm text-muted-foreground md:col-span-2">
                     Registered At:{" "}
@@ -958,6 +1143,13 @@ export default function DashboardPage() {
                   "Set hack response scores"
                 )
               }
+              onRegisterHackDetection={registerHackDetection}
+              onAnalyzeTransaction={analyzeTransaction}
+              onCheckRiskScore={checkRiskScore}
+              onCheckSecurityStatus={checkSecurityStatus}
+              securityStatus={securityStatus}
+              riskScoreResult={riskScoreResult}
+              analysisResult={analysisResult}
             />
           ) : null}
         </TabsContent>
@@ -977,5 +1169,6 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
     </PageShell>
+    </>
   );
 }

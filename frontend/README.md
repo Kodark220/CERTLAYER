@@ -7,10 +7,10 @@ Planned surfaces:
 
 ## Backend Requirement
 
-Frontend expects the API service to be running and correctly wired to GenLayer Studio:
+Frontend expects the API service to be running and correctly wired to GenLayer Bradbury:
 
-- Backend env: `GENLAYER_RPC_URL=https://studio.genlayer.com/api`
-- Backend env: `GENLAYER_CHAIN=studionet`
+- Backend env: `GENLAYER_RPC_URL=https://rpc-bradbury.genlayer.com`
+- Backend env: `GENLAYER_CHAIN=testnet-bradbury`
 - Frontend env: `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` (or your deployed API URL)
 
 ## Immediate Next Build

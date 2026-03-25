@@ -1,10 +1,10 @@
 import { createClient, createAccount } from 'genlayer-js';
-import { studionet } from 'genlayer-js/chains';
+import { testnetBradbury } from 'genlayer-js/chains';
 import { TransactionStatus } from 'genlayer-js/types';
 
-const RPC_URL = process.env.GENLAYER_RPC_URL || 'https://studio.genlayer.com/api';
+const RPC_URL = process.env.GENLAYER_RPC_URL || 'https://rpc-bradbury.genlayer.com';
 const CONTRACT_ADDRESS =
-  process.env.GENLAYER_CONTRACT || '0x57a3212cbca238455291ad8ca2CA51F4D269Ae6F';
+  process.env.GENLAYER_CONTRACT || '0x3D91657256bcad522b201eaED2a6C9FEb3208Bd1';
 const PRIVATE_KEY = process.env.GENLAYER_PRIVATE_KEY || '';
 
 if (!PRIVATE_KEY) {
@@ -15,7 +15,7 @@ if (!PRIVATE_KEY) {
 async function main() {
   const account = createAccount(PRIVATE_KEY);
   const client = createClient({
-    chain: studionet,
+    chain: testnetBradbury,
     endpoint: RPC_URL,
     account,
   });

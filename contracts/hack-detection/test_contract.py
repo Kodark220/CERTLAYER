@@ -4,12 +4,12 @@ import time
 import urllib.request
 
 
-RPC_URL = os.getenv("GENLAYER_RPC_URL", "https://studio.genlayer.com/api")
-CONTRACT_ADDRESS = os.getenv("GENLAYER_CONTRACT", "0x57a3212cbca238455291ad8ca2CA51F4D269Ae6F")
+RPC_URL = os.getenv("GENLAYER_RPC_URL", "https://rpc-bradbury.genlayer.com")
+CONTRACT_ADDRESS = os.getenv("GENLAYER_CONTRACT", "0x3D91657256bcad522b201eaED2a6C9FEb3208Bd1")
 FROM_ADDRESS = os.getenv("GENLAYER_FROM", "")
 API_KEY = os.getenv("GENLAYER_API_KEY", "")
 
-# Use gen_sendTransaction for writes (StudioNet often accepts unsigned txs)
+# Use gen_sendTransaction for writes (Bradbury often accepts unsigned txs)
 CALL_WRITE = os.getenv("GENLAYER_WRITE_METHOD", "gen_sendTransaction")
 CALL_VIEW = os.getenv("GENLAYER_VIEW_METHOD", "gen_call")
 

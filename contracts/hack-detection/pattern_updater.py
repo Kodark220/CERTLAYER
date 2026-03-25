@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from typing import Any, Dict, List, Tuple
 
 
-RPC_URL = os.getenv("GENLAYER_RPC_URL", "https://studio.genlayer.com/api")
+RPC_URL = os.getenv("GENLAYER_RPC_URL", "https://rpc-bradbury.genlayer.com")
 CONTRACT_ADDRESS = os.getenv("GENLAYER_CONTRACT", "")
 FROM_ADDRESS = os.getenv("GENLAYER_FROM", "")
 API_KEY = os.getenv("GENLAYER_API_KEY", "")

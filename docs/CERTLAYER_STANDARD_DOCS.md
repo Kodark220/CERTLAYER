@@ -43,7 +43,7 @@ The vision is one integrated system where:
 
 - Node.js 20+
 - npm 10+
-- Access to GenLayer endpoint (`https://studio.genlayer.com/api`) for live on-chain mode
+- Access to GenLayer Bradbury endpoint (`https://rpc-bradbury.genlayer.com`) for live on-chain mode
 
 ### 2) Install dependencies
 

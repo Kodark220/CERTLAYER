@@ -61,6 +61,14 @@ export function ProtocolRegistrationSection({
             />
           </div>
           <div className="space-y-2">
+            <Label>Protected Contract Address</Label>
+            <Input
+              value={form.contractAddress}
+              onChange={(e) => onFieldChange("contractAddress", e.target.value)}
+              placeholder="0x...optional guard target"
+            />
+          </div>
+          <div className="space-y-2">
             <Label>Protocol Type</Label>
             <Select value={form.protocolType} onValueChange={(value) => onFieldChange("protocolType", value)}>
               <SelectTrigger>

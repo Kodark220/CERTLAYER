@@ -90,13 +90,13 @@ Partner-facing reliability and reputation data access.
 
 ## Step-by-Step Setup (PowerShell)
 
-### 0) Canonical GenLayer Studio endpoint
+### 0) Canonical GenLayer Bradbury endpoint
 
-Use this exact endpoint in this project:
+Use Bradbury as the default live testnet in this project:
 
 ```env
-GENLAYER_RPC_URL=https://studio.genlayer.com/api
-GENLAYER_CHAIN=studionet
+GENLAYER_RPC_URL=https://rpc-bradbury.genlayer.com
+GENLAYER_CHAIN=testnet-bradbury
 ```
 
 ### 1) Install dependencies
@@ -115,13 +115,13 @@ Copy-Item frontend/.env.example frontend/.env -Force
 if (Test-Path worker/.env.example) { Copy-Item worker/.env.example worker/.env -Force }
 ```
 
-### 3) Fix GenLayer init missing Studio API (important)
+### 3) Set the target network explicitly
 
-If GenLayer initialization did not set Studio endpoint automatically, set this manually in `api/.env`:
+If your GenLayer configuration still points to an older network, override it in `api/.env`:
 
 ```env
-GENLAYER_RPC_URL=https://studio.genlayer.com/api
-GENLAYER_CHAIN=studionet
+GENLAYER_RPC_URL=https://rpc-bradbury.genlayer.com
+GENLAYER_CHAIN=testnet-bradbury
 ```
 
 ### 4) Choose your run mode
@@ -142,6 +142,12 @@ GENLAYER_CONTRACT_ADDRESS=<deployed_certlayer_contract>
 GENLAYER_SECURITY_CONTRACT_ADDRESS=<deployed_hack_detection_contract_optional>
 GENLAYER_SERVER_PRIVATE_KEY=<0x...private_key_for_signing>
 GENLAYER_SERVER_ACCOUNT=<0x...derived_from_private_key>
+```
+
+Deploy both GenLayer contracts to Bradbury with:
+
+```powershell
+.\scripts\deploy-bradbury.ps1 -AdminAddress 0xYourAdminAddress
 ```
 
 Optional internal access (useful for quick API testing without wallet session):
@@ -289,10 +295,10 @@ Invoke-RestMethod "$BASE/v1/security/risk-score?txHash=0xabc123demo" -Headers (@
 
 ## Common Setup Issues
 
-### Issue: GenLayer init did not bring Studio API
+### Issue: config still points to an older network
 Fix:
-- set `GENLAYER_RPC_URL=https://studio.genlayer.com/api`
-- set `GENLAYER_CHAIN=studionet`
+- set `GENLAYER_RPC_URL=https://rpc-bradbury.genlayer.com`
+- set `GENLAYER_CHAIN=testnet-bradbury`
 - restart API service
 
 ### Issue: `401 unauthorized` on POST endpoints

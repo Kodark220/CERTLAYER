@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple
 
 
-RPC_URL = "https://studio.genlayer.com/api"
-CONTRACT_ADDRESS = "0x57a3212cbca238455291ad8ca2CA51F4D269Ae6F"
+RPC_URL = os.getenv("GENLAYER_RPC_URL", "https://rpc-bradbury.genlayer.com")
+CONTRACT_ADDRESS = os.getenv("GENLAYER_CONTRACT", "0x3D91657256bcad522b201eaED2a6C9FEb3208Bd1")
 
 # RPC method: use "gen_sendTransaction" if your RPC supports it.
 # If unsure, start with "gen_call" (won't persist on-chain).
@@ -122,7 +122,7 @@ def _call_analyze(tx_data: str, tx_hash: str) -> None:
     tx_obj = {"to": CONTRACT_ADDRESS, "method": "analyze_transaction", "args": args}
     if FROM_ADDRESS:
         tx_obj["from"] = FROM_ADDRESS
-    # Some StudioNet setups expect params: [tx_obj]
+    # Some Bradbury setups expect params: [tx_obj]
     result = _rpc_call(CALL_METHOD, [tx_obj])
     print(f"[{_now_iso()}] analyze_transaction -> {result}")
 

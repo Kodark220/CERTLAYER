@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import Navbar from "@/components/Navbar";
 import { PageHeader } from "../../src/components/layout/PageHeader";
 import { PageShell } from "../../src/components/layout/PageShell";
 
@@ -53,6 +54,8 @@ export default function ExplorerPage() {
   }, [items]);
 
   return (
+    <>
+    <Navbar />
     <PageShell>
       <PageHeader
         title="Public Reputation Explorer"
@@ -112,6 +115,7 @@ export default function ExplorerPage() {
         </CardContent>
       </Card>
     </PageShell>
+    </>
   );
 }
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAccount, useConnect, useSignMessage } from "wagmi";
 import { injected } from "wagmi/connectors";
+import Navbar from "@/components/Navbar";
 
 type AuthMode = "signin" | "signup";
 
@@ -60,6 +61,7 @@ export default function SignInPage() {
 
   return (
     <main className="min-h-screen bg-[#0B1220] text-white">
+      <Navbar />
       <div className="mx-auto max-w-md px-6 py-20">
         <h1 className="text-3xl font-semibold">Sign In</h1>
         <p className="mt-2 text-white/70">Sign in with wallet or email to access your CertLayer dashboard.</p>

@@ -1,7 +1,8 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SecurityForm } from "../../types/dashboard";
@@ -15,6 +16,13 @@ type Props = {
   onCreateSecurityIncident: () => void;
   onAttachLossSnapshot: () => void;
   onSetHackScores: () => void;
+  onRegisterHackDetection: () => void;
+  onAnalyzeTransaction: () => void;
+  onCheckRiskScore: () => void;
+  onCheckSecurityStatus: () => void;
+  securityStatus: { paused: boolean } | null;
+  riskScoreResult: { txHash: string; score: number } | null;
+  analysisResult: { txHash: string; analysis: string } | null;
 };
 
 export function SecurityRecoverySection({
@@ -26,8 +34,113 @@ export function SecurityRecoverySection({
   onCreateSecurityIncident,
   onAttachLossSnapshot,
   onSetHackScores,
+  onRegisterHackDetection,
+  onAnalyzeTransaction,
+  onCheckRiskScore,
+  onCheckSecurityStatus,
+  securityStatus,
+  riskScoreResult,
+  analysisResult,
 }: Props) {
   return (
+    <div className="space-y-6">
+    {/* ── Hack Detection Registration & Monitoring ── */}
+    <Card className="border-border/70 bg-card shadow-sm">
+      <CardHeader>
+        <CardTitle>Hack Detection</CardTitle>
+        <CardDescription>Register your protocol for AI-powered security monitoring, analyze transactions, and check risk scores.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Register protocol */}
+        <div className="space-y-2">
+          <Label>Protocol Contract Address</Label>
+          <div className="flex gap-2">
+            <Input
+              className="flex-1"
+              value={form.hackDetectionAddress}
+              onChange={(e) => onFieldChange("hackDetectionAddress", e.target.value)}
+              placeholder="0x... (your protocol's contract address)"
+            />
+            <Button onClick={onRegisterHackDetection} disabled={loading}>
+              {loading ? "Registering..." : "Register for Hack Detection"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Registers your protocol address with the HackDetection intelligent contract for on-chain AI threat monitoring.
+          </p>
+        </div>
+
+        {/* Global status */}
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" onClick={onCheckSecurityStatus} disabled={loading}>
+            Check Global Status
+          </Button>
+          {securityStatus !== null ? (
+            <Badge variant={securityStatus.paused ? "destructive" : "secondary"}>
+              {securityStatus.paused ? "PAUSED — Threat Active" : "Active — No Threats"}
+            </Badge>
+          ) : null}
+        </div>
+
+        {/* Analyze transaction */}
+        <div className="space-y-2 rounded-md border border-border/50 p-4">
+          <Label className="text-sm font-medium">Analyze a Transaction</Label>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Transaction Data</Label>
+              <Input
+                value={form.analyzeTxData}
+                onChange={(e) => onFieldChange("analyzeTxData", e.target.value)}
+                placeholder="Raw transaction data or description"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Transaction Hash</Label>
+              <Input
+                value={form.analyzeTxHash}
+                onChange={(e) => onFieldChange("analyzeTxHash", e.target.value)}
+                placeholder="0x..."
+              />
+            </div>
+          </div>
+          <Button variant="outline" onClick={onAnalyzeTransaction} disabled={loading}>
+            {loading ? "Analyzing..." : "Analyze Transaction"}
+          </Button>
+          {analysisResult ? (
+            <div className="rounded-md border border-border/70 bg-muted/20 p-3">
+              <p className="text-xs font-medium text-muted-foreground">Analysis for {analysisResult.txHash}</p>
+              <p className="mt-1 text-sm">{analysisResult.analysis || "No analysis available"}</p>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Risk score lookup */}
+        <div className="space-y-2 rounded-md border border-border/50 p-4">
+          <Label className="text-sm font-medium">Check Risk Score</Label>
+          <div className="flex gap-2">
+            <Input
+              className="flex-1"
+              value={form.riskScoreTxHash}
+              onChange={(e) => onFieldChange("riskScoreTxHash", e.target.value)}
+              placeholder="Transaction hash to look up"
+            />
+            <Button variant="outline" onClick={onCheckRiskScore} disabled={loading}>
+              {loading ? "Checking..." : "Check Score"}
+            </Button>
+          </div>
+          {riskScoreResult ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Risk Score:</span>
+              <Badge variant={riskScoreResult.score >= 70 ? "destructive" : "secondary"}>
+                {riskScoreResult.score} / 100
+              </Badge>
+            </div>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+
+    {/* ── Existing: Security Incident Response ── */}
     <Card className="border-border/70 bg-card shadow-sm">
       <CardHeader>
         <CardTitle>Security Incident Response (Admin)</CardTitle>
@@ -114,5 +227,6 @@ export function SecurityRecoverySection({
         ) : null}
       </CardContent>
     </Card>
+    </div>
   );
 }
