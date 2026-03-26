@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:certlayer": "python test_certlayer_e2e.py",
+    "test:hackdet": "python test_hack_detection_e2e.py",
+    "test:js": "node test_e2e.mjs",
+    "test:all": "python test_certlayer_e2e.py && python test_hack_detection_e2e.py && node test_e2e.mjs"
+  },
+  "dependencies": {
+    "genlayer-js": "^0.23.1"
+  }
+}

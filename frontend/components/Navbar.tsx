@@ -1,11 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("certlayer_session_token") : null;
+    setSignedIn(Boolean(token));
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0B1220]/80 backdrop-blur">
@@ -24,12 +30,17 @@ export default function Navbar() {
 
         {/* Desktop nav */}
         <nav className="hidden items-center gap-6 text-sm text-white/80 md:flex">
-          <a href="#how" className="hover:text-white">How it works</a>
+          <a href="/#how" className="hover:text-white">How it works</a>
           <Link href="/explorer" className="hover:text-white">Explorer</Link>
-          <Link href="/dashboard" className="hover:text-white">Dashboard</Link>
-          <Link href="/signin" className="rounded-lg bg-[#2A76F6] px-4 py-2 text-white hover:bg-[#1f63d5]">
-            Sign In
-          </Link>
+          {signedIn ? (
+            <Link href="/dashboard" className="rounded-lg bg-[#2A76F6] px-4 py-2 text-white hover:bg-[#1f63d5]">
+              Dashboard
+            </Link>
+          ) : (
+            <Link href="/signin" className="rounded-lg bg-[#2A76F6] px-4 py-2 text-white hover:bg-[#1f63d5]">
+              Sign In
+            </Link>
+          )}
         </nav>
 
         {/* Mobile hamburger */}
@@ -52,16 +63,25 @@ export default function Navbar() {
       {mobileOpen ? (
         <nav className="border-t border-white/10 bg-[#0B1220]/95 px-6 py-4 md:hidden">
           <div className="flex flex-col gap-3 text-sm">
-            <a href="#how" onClick={() => setMobileOpen(false)} className="py-2 text-white/80 hover:text-white">How it works</a>
+            <a href="/#how" onClick={() => setMobileOpen(false)} className="py-2 text-white/80 hover:text-white">How it works</a>
             <Link href="/explorer" onClick={() => setMobileOpen(false)} className="py-2 text-white/80 hover:text-white">Explorer</Link>
-            <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="py-2 text-white/80 hover:text-white">Dashboard</Link>
-            <Link
-              href="/signin"
-              onClick={() => setMobileOpen(false)}
-              className="mt-1 inline-flex h-11 items-center justify-center rounded-xl bg-[#2A76F6] text-sm font-semibold text-white hover:bg-[#1f63d5]"
-            >
-              Sign In
-            </Link>
+            {signedIn ? (
+              <Link
+                href="/dashboard"
+                onClick={() => setMobileOpen(false)}
+                className="mt-1 inline-flex h-11 items-center justify-center rounded-xl bg-[#2A76F6] text-sm font-semibold text-white hover:bg-[#1f63d5]"
+              >
+                Dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/signin"
+                onClick={() => setMobileOpen(false)}
+                className="mt-1 inline-flex h-11 items-center justify-center rounded-xl bg-[#2A76F6] text-sm font-semibold text-white hover:bg-[#1f63d5]"
+              >
+                Sign In
+              </Link>
+            )}
           </div>
         </nav>
       ) : null}
