@@ -4,7 +4,7 @@ import { TransactionStatus } from 'genlayer-js/types';
 
 const RPC_URL = process.env.GENLAYER_RPC_URL || 'https://rpc-bradbury.genlayer.com';
 const CONTRACT_ADDRESS =
-  process.env.GENLAYER_CONTRACT || '0x3D91657256bcad522b201eaED2a6C9FEb3208Bd1';
+  process.env.GENLAYER_CONTRACT || '0x0E2497d18FB4f09Ef9A71C7bF5D6494c714D4728';
 const PRIVATE_KEY = process.env.GENLAYER_PRIVATE_KEY || '';
 
 if (!PRIVATE_KEY) {

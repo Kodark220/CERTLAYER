@@ -194,16 +194,6 @@ class HackDetection(gl.Contract):
             return int(ts)
         return 0
 
-    def _nondet_bool_token(self, prompt: str) -> str:
-        # Return only TRUE or FALSE to stabilize validator outcomes
-        raw = gl.nondet.exec_prompt(prompt)
-        cleaned = raw.strip().upper()
-        if "TRUE" in cleaned:
-            return "TRUE"
-        if "FALSE" in cleaned:
-            return "FALSE"
-        return "FALSE"
-
     def _require_role(self, role: str):
         sender = gl.message.sender_address
         if self.roles.get(sender, "") != role and not self.admins.get(sender, False):
@@ -283,18 +273,28 @@ class HackDetection(gl.Contract):
                 threat_resolved = True
                 break
         if not threat_resolved:
-            # 2. AI consensus via Equivalence Principle (platform validators)
+            # 2. AI consensus via Equivalence Principle (run_nondet_unsafe per official docs)
             attack_patterns = list(self.attack_patterns)
-            _nondet_bool_token = self._nondet_bool_token
             prompt = f"""SYSTEM: You are a security classifier. Output ONLY a single token: TRUE or FALSE.
 Return TRUE only if the transaction is clearly malicious or strongly indicative of a hack.
 If uncertain, return FALSE.
 Data: {tx_data}
 Known patterns: {[p.signature for p in attack_patterns]}
 OUTPUT: TRUE or FALSE"""
-            vote_token = gl.eq_principle.strict_eq(lambda p=prompt, f=_nondet_bool_token: f(p))
+
+            def _ai_leader():
+                raw = gl.nondet.exec_prompt(prompt)
+                cleaned = raw.strip().upper()
+                return "TRUE" if "TRUE" in cleaned else "FALSE"
+
+            def _ai_validator(leader_result):
+                if not isinstance(leader_result, gl.vm.Return):
+                    return False
+                return _ai_leader() == leader_result.calldata
+
+            vote_token = gl.vm.run_nondet_unsafe(_ai_leader, _ai_validator)
             risk_score = 80 if vote_token == "TRUE" else 20
-            self.tx_risk_scores[tx_hash] = risk_score
+            self.tx_risk_scores[tx_hash] = u8(risk_score)
             if vote_token == "TRUE":
                 self._record_event("ai_detected", tx_hash, int(risk_score), "AI consensus", sender)
                 self._trigger_circuit_breaker(sender, tx_hash, int(risk_score))
@@ -341,13 +341,23 @@ OUTPUT: TRUE or FALSE"""
         self._append_recent(tx_hash)
 
     def _predict_attack(self, tx_data: str) -> dict:
-        """Forecast attack likelihood (deterministic single-token)"""
-        _nondet_bool_token = self._nondet_bool_token
+        """Forecast attack likelihood via run_nondet_unsafe (per official docs)"""
         prompt = f"""SYSTEM: Output ONLY a single token: TRUE or FALSE.
 Return TRUE only if clearly malicious. If uncertain, return FALSE.
 Data: {tx_data}
 OUTPUT: TRUE or FALSE"""
-        vote_token = gl.eq_principle.strict_eq(lambda p=prompt, f=_nondet_bool_token: f(p))
+
+        def _ai_leader():
+            raw = gl.nondet.exec_prompt(prompt)
+            cleaned = raw.strip().upper()
+            return "TRUE" if "TRUE" in cleaned else "FALSE"
+
+        def _ai_validator(leader_result):
+            if not isinstance(leader_result, gl.vm.Return):
+                return False
+            return _ai_leader() == leader_result.calldata
+
+        vote_token = gl.vm.run_nondet_unsafe(_ai_leader, _ai_validator)
         return {"likely": vote_token == "TRUE", "score": 80 if vote_token == "TRUE" else 20, "reason": "ai_bool"}
 
     def _trigger_circuit_breaker(self, sender: Address, tx_hash: str, risk_score: int):
@@ -380,7 +390,7 @@ OUTPUT: TRUE or FALSE"""
             tx_hash=tx_hash,
             risk_score=u8(risk_score),
             affected_asset=affected_asset,
-            contract_address=Address(contract_addr),
+            contract_address=self._to_address(contract_addr),
             user_action=user_action,
             user=user,
         )
@@ -398,13 +408,23 @@ OUTPUT: TRUE or FALSE"""
     @gl.public.write
     def escalate_analysis(self, tx_hash: str) -> None:
         """Escalate to more validators for deep threat analysis"""
-        _nondet_bool_token = self._nondet_bool_token
         prompt = f"""SYSTEM: Output ONLY a single token: TRUE or FALSE.
 Return TRUE only if high-confidence malicious.
 If uncertain, return FALSE.
 Data: {tx_hash}
 OUTPUT: TRUE or FALSE"""
-        vote_token = gl.eq_principle.strict_eq(lambda p=prompt, f=_nondet_bool_token: f(p))
+
+        def _ai_leader():
+            raw = gl.nondet.exec_prompt(prompt)
+            cleaned = raw.strip().upper()
+            return "TRUE" if "TRUE" in cleaned else "FALSE"
+
+        def _ai_validator(leader_result):
+            if not isinstance(leader_result, gl.vm.Return):
+                return False
+            return _ai_leader() == leader_result.calldata
+
+        vote_token = gl.vm.run_nondet_unsafe(_ai_leader, _ai_validator)
         if vote_token == "TRUE":
             caller = gl.message.sender_address
             self._record_event("deep_confirmed", tx_hash, 100, "High-confidence threat confirmed", caller)

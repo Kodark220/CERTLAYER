@@ -12,8 +12,8 @@ Tests the security contract on Bradbury testnet:
 
 Usage:
   export GENLAYER_RPC_URL=https://rpc-bradbury.genlayer.com
-  export GENLAYER_SECURITY_CONTRACT=0x3D91657256bcad522b201eaED2a6C9FEb3208Bd1
-  export GENLAYER_FROM=0x7DeD885a1F6F6C69Dd8472b3E66d950396F4024a
+  export GENLAYER_SECURITY_CONTRACT=0x0E2497d18FB4f09Ef9A71C7bF5D6494c714D4728
+  export GENLAYER_FROM=0xf9346827f713eb953a2e22465b9ee91901726bdc
 
   python test_hack_detection_e2e.py
 """
@@ -28,11 +28,11 @@ import urllib.request
 RPC_URL = os.getenv("GENLAYER_RPC_URL", "https://rpc-bradbury.genlayer.com")
 CONTRACT = os.getenv(
     "GENLAYER_SECURITY_CONTRACT",
-    "0x3D91657256bcad522b201eaED2a6C9FEb3208Bd1",
+    "0x0E2497d18FB4f09Ef9A71C7bF5D6494c714D4728",
 )
 FROM_ADDRESS = os.getenv(
     "GENLAYER_FROM",
-    "0x7DeD885a1F6F6C69Dd8472b3E66d950396F4024a",
+    "0xf9346827f713eb953a2e22465b9ee91901726bdc",
 )
 API_KEY = os.getenv("GENLAYER_API_KEY", "")
 

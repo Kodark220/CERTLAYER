@@ -17,9 +17,9 @@ import { createHash } from "node:crypto";
 // ── Config ──────────────────────────────────────────────────
 const RPC_URL = process.env.GENLAYER_RPC_URL || "https://rpc-bradbury.genlayer.com";
 const CERTLAYER_ADDRESS =
-  process.env.GENLAYER_CONTRACT || "0x2Beedb6570e3f15272363462985c89AfC88F6F09";
+  process.env.GENLAYER_CONTRACT || "0xD5F9BadF3f7AdFD32767fA5692ca18f6F265f677";
 const HACKDET_ADDRESS =
-  process.env.GENLAYER_SECURITY_CONTRACT || "0x3D91657256bcad522b201eaED2a6C9FEb3208Bd1";
+  process.env.GENLAYER_SECURITY_CONTRACT || "0x0E2497d18FB4f09Ef9A71C7bF5D6494c714D4728";
 const PRIVATE_KEY = process.env.GENLAYER_PRIVATE_KEY || "";
 
 if (!PRIVATE_KEY) {

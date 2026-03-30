@@ -13,8 +13,8 @@ Tests the full lifecycle on the Bradbury testnet:
 Usage:
   # Set env vars (or rely on defaults from .env):
   export GENLAYER_RPC_URL=https://rpc-bradbury.genlayer.com
-  export GENLAYER_CONTRACT=0x2Beedb6570e3f15272363462985c89AfC88F6F09
-  export GENLAYER_FROM=0x7DeD885a1F6F6C69Dd8472b3E66d950396F4024a
+  export GENLAYER_CONTRACT=0xD5F9BadF3f7AdFD32767fA5692ca18f6F265f677
+  export GENLAYER_FROM=0xf9346827f713eb953a2e22465b9ee91901726bdc
 
   python test_certlayer_e2e.py
 """
@@ -30,11 +30,11 @@ import hashlib
 RPC_URL = os.getenv("GENLAYER_RPC_URL", "https://rpc-bradbury.genlayer.com")
 CONTRACT = os.getenv(
     "GENLAYER_CONTRACT",
-    "0x2Beedb6570e3f15272363462985c89AfC88F6F09",
+    "0xD5F9BadF3f7AdFD32767fA5692ca18f6F265f677",
 )
 FROM_ADDRESS = os.getenv(
     "GENLAYER_FROM",
-    "0x7DeD885a1F6F6C69Dd8472b3E66d950396F4024a",
+    "0xf9346827f713eb953a2e22465b9ee91901726bdc",
 )
 API_KEY = os.getenv("GENLAYER_API_KEY", "")
 

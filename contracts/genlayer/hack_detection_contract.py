@@ -20,7 +20,7 @@ class HackDetection(gl.Contract):
     def _require_admin(self):
         sender = gl.message.sender_address
         if self.roles.get(sender, "") != "admin":
-            raise Exception("Only admin allowed")
+            raise gl.vm.UserError("Only admin allowed")
 
     @gl.public.view
     def explain_intelligence(self) -> str:
@@ -36,7 +36,7 @@ class HackDetection(gl.Contract):
 
     @gl.public.view
     def get_role(self, user: Address) -> str:
-        return self.roles.get(Address(user), "user")
+        return self.roles.get(user, "user")
 
     @gl.public.view
     def get_risk_score(self, tx_hash: str) -> int:
@@ -61,19 +61,30 @@ class HackDetection(gl.Contract):
     @gl.public.write
     def register_protocol(self, protocol: Address):
         self._require_admin()
-        self.protected_protocols[Address(protocol)] = True
+        self.protected_protocols[protocol] = True
 
     @gl.public.write
     def analyze_transaction(self, tx_data: str, tx_hash: str):
         if self.is_paused:
-            raise Exception("Contract is paused")
+            raise gl.vm.UserError("Contract is paused")
         prompt = (
             "SYSTEM: You are a security classifier. Output ONLY TRUE or FALSE. "
             "Return TRUE only if the transaction is clearly malicious. "
             "Data: " + tx_data + " OUTPUT: TRUE or FALSE"
         )
-        raw = gl.eq_principle.strict_eq(lambda: gl.nondet.exec_prompt(prompt))
-        is_threat = "TRUE" in raw.strip().upper()
+
+        def _ai_leader():
+            raw = gl.nondet.exec_prompt(prompt)
+            cleaned = raw.strip().upper()
+            return "TRUE" if "TRUE" in cleaned else "FALSE"
+
+        def _ai_validator(leader_result):
+            if not isinstance(leader_result, gl.vm.Return):
+                return False
+            return _ai_leader() == leader_result.calldata
+
+        vote_token = gl.vm.run_nondet_unsafe(_ai_leader, _ai_validator)
+        is_threat = vote_token == "TRUE"
         score = u8(80) if is_threat else u8(20)
         self.tx_risk_scores[tx_hash] = score
         level = "HIGH" if int(score) >= 71 else "MEDIUM" if int(score) >= 31 else "LOW"

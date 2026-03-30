@@ -171,15 +171,28 @@ class HackDetection(gl.Contract):
                 self._set_protocol_pause(protocol, reason, tx_hash, risk_score)
 
     def _to_address(self, value):
+        # Unwrap CLI list-wrapping (GenVM BUG #2 workaround)
+        while isinstance(value, list) and len(value) == 1:
+            value = value[0]
         if isinstance(value, Address):
             return value
         if isinstance(value, int):
-            # Treat as big-endian 20-byte address (mask to 160 bits)
             mask = (1 << 160) - 1
             v = value & mask
             return Address(v.to_bytes(20, "big"))
-        # Accept hex strings from deployment UIs
         return Address(value)
+
+    def _to_str(self, value) -> str:
+        """Unwrap CLI list-wrapping for string args (GenVM BUG #2 workaround)"""
+        while isinstance(value, list) and len(value) == 1:
+            value = value[0]
+        return str(value) if not isinstance(value, str) else value
+
+    def _to_int(self, value) -> int:
+        """Unwrap CLI list-wrapping for int args (GenVM BUG #2 workaround)"""
+        while isinstance(value, list) and len(value) == 1:
+            value = value[0]
+        return int(value)
 
     def _get_timestamp(self) -> int:
         # Try common runtime timestamp sources; fall back to 0 to avoid hard failure
@@ -194,16 +207,6 @@ class HackDetection(gl.Contract):
             return int(ts)
         return 0
 
-    def _nondet_bool_token(self, prompt: str) -> str:
-        # Return only TRUE or FALSE to stabilize validator outcomes
-        raw = gl.nondet.exec_prompt(prompt)
-        cleaned = raw.strip().upper()
-        if "TRUE" in cleaned:
-            return "TRUE"
-        if "FALSE" in cleaned:
-            return "FALSE"
-        return "FALSE"
-
     def _require_role(self, role: str):
         sender = gl.message.sender_address
         if self.roles.get(sender, "") != role and not self.admins.get(sender, False):
@@ -215,6 +218,7 @@ class HackDetection(gl.Contract):
 
     @gl.public.write
     def add_admin(self, new_admin: Address):
+        new_admin = self._to_address(new_admin)
         self._require_role(self.ADMIN_ROLE)
         self.admins[new_admin] = True
         self.roles[new_admin] = self.ADMIN_ROLE
@@ -223,6 +227,7 @@ class HackDetection(gl.Contract):
 
     @gl.public.write
     def remove_admin(self, admin_addr: Address):
+        admin_addr = self._to_address(admin_addr)
         self._require_role(self.ADMIN_ROLE)
         if admin_addr == self.admin:
             raise UserError("Cannot remove contract creator admin")
@@ -233,6 +238,8 @@ class HackDetection(gl.Contract):
 
     @gl.public.write
     def set_role(self, user: Address, role: str):
+        user = self._to_address(user)
+        role = self._to_str(role)
         self._require_role(self.ADMIN_ROLE)
         if role not in [self.ADMIN_ROLE, self.SECURITY_ROLE, self.USER_ROLE]:
             raise UserError("Invalid role")
@@ -247,6 +254,7 @@ class HackDetection(gl.Contract):
 
     @gl.public.write
     def fetch_patterns_from_source(self, source_url: str):
+        source_url = self._to_str(source_url)
         self._require_role(self.ADMIN_ROLE)
         self.last_pattern_fetch = source_url
         # In this environment the actual fetch should be done off-chain by a relayer.
@@ -259,6 +267,8 @@ class HackDetection(gl.Contract):
         """Real-time detection: AI + pattern matching
         Uses gl.message.sender_address as the caller (prevents spoofing).
         """
+        tx_data = self._to_str(tx_data)
+        tx_hash = self._to_str(tx_hash)
         sender = gl.message.sender_address
         if self.is_paused:
             raise UserError("Contract is paused")
@@ -283,18 +293,28 @@ class HackDetection(gl.Contract):
                 threat_resolved = True
                 break
         if not threat_resolved:
-            # 2. AI consensus via Equivalence Principle (platform validators)
+            # 2. AI consensus via Equivalence Principle (run_nondet_unsafe per official docs)
             attack_patterns = list(self.attack_patterns)
-            _nondet_bool_token = self._nondet_bool_token
             prompt = f"""SYSTEM: You are a security classifier. Output ONLY a single token: TRUE or FALSE.
 Return TRUE only if the transaction is clearly malicious or strongly indicative of a hack.
 If uncertain, return FALSE.
 Data: {tx_data}
 Known patterns: {[p.signature for p in attack_patterns]}
 OUTPUT: TRUE or FALSE"""
-            vote_token = gl.eq_principle.strict_eq(lambda p=prompt, f=_nondet_bool_token: f(p))
+
+            def _ai_leader():
+                raw = gl.nondet.exec_prompt(prompt)
+                cleaned = raw.strip().upper()
+                return "TRUE" if "TRUE" in cleaned else "FALSE"
+
+            def _ai_validator(leader_result):
+                if not isinstance(leader_result, gl.vm.Return):
+                    return False
+                return _ai_leader() == leader_result.calldata
+
+            vote_token = gl.vm.run_nondet_unsafe(_ai_leader, _ai_validator)
             risk_score = 80 if vote_token == "TRUE" else 20
-            self.tx_risk_scores[tx_hash] = risk_score
+            self.tx_risk_scores[tx_hash] = u8(risk_score)
             if vote_token == "TRUE":
                 self._record_event("ai_detected", tx_hash, int(risk_score), "AI consensus", sender)
                 self._trigger_circuit_breaker(sender, tx_hash, int(risk_score))
@@ -341,13 +361,23 @@ OUTPUT: TRUE or FALSE"""
         self._append_recent(tx_hash)
 
     def _predict_attack(self, tx_data: str) -> dict:
-        """Forecast attack likelihood (deterministic single-token)"""
-        _nondet_bool_token = self._nondet_bool_token
+        """Forecast attack likelihood via run_nondet_unsafe (per official docs)"""
         prompt = f"""SYSTEM: Output ONLY a single token: TRUE or FALSE.
 Return TRUE only if clearly malicious. If uncertain, return FALSE.
 Data: {tx_data}
 OUTPUT: TRUE or FALSE"""
-        vote_token = gl.eq_principle.strict_eq(lambda p=prompt, f=_nondet_bool_token: f(p))
+
+        def _ai_leader():
+            raw = gl.nondet.exec_prompt(prompt)
+            cleaned = raw.strip().upper()
+            return "TRUE" if "TRUE" in cleaned else "FALSE"
+
+        def _ai_validator(leader_result):
+            if not isinstance(leader_result, gl.vm.Return):
+                return False
+            return _ai_leader() == leader_result.calldata
+
+        vote_token = gl.vm.run_nondet_unsafe(_ai_leader, _ai_validator)
         return {"likely": vote_token == "TRUE", "score": 80 if vote_token == "TRUE" else 20, "reason": "ai_bool"}
 
     def _trigger_circuit_breaker(self, sender: Address, tx_hash: str, risk_score: int):
@@ -380,7 +410,7 @@ OUTPUT: TRUE or FALSE"""
             tx_hash=tx_hash,
             risk_score=u8(risk_score),
             affected_asset=affected_asset,
-            contract_address=Address(contract_addr),
+            contract_address=self._to_address(contract_addr),
             user_action=user_action,
             user=user,
         )
@@ -398,13 +428,24 @@ OUTPUT: TRUE or FALSE"""
     @gl.public.write
     def escalate_analysis(self, tx_hash: str) -> None:
         """Escalate to more validators for deep threat analysis"""
-        _nondet_bool_token = self._nondet_bool_token
+        tx_hash = self._to_str(tx_hash)
         prompt = f"""SYSTEM: Output ONLY a single token: TRUE or FALSE.
 Return TRUE only if high-confidence malicious.
 If uncertain, return FALSE.
 Data: {tx_hash}
 OUTPUT: TRUE or FALSE"""
-        vote_token = gl.eq_principle.strict_eq(lambda p=prompt, f=_nondet_bool_token: f(p))
+
+        def _ai_leader():
+            raw = gl.nondet.exec_prompt(prompt)
+            cleaned = raw.strip().upper()
+            return "TRUE" if "TRUE" in cleaned else "FALSE"
+
+        def _ai_validator(leader_result):
+            if not isinstance(leader_result, gl.vm.Return):
+                return False
+            return _ai_leader() == leader_result.calldata
+
+        vote_token = gl.vm.run_nondet_unsafe(_ai_leader, _ai_validator)
         if vote_token == "TRUE":
             caller = gl.message.sender_address
             self._record_event("deep_confirmed", tx_hash, 100, "High-confidence threat confirmed", caller)
@@ -426,6 +467,8 @@ OUTPUT: TRUE or FALSE"""
 
     @gl.public.write
     def add_attack_pattern(self, signature: str, description: str):
+        signature = self._to_str(signature)
+        description = self._to_str(description)
         if gl.message.sender_address != self.admin:
             raise UserError("Only admin can add patterns")
         pattern = AttackPattern(
@@ -441,6 +484,8 @@ OUTPUT: TRUE or FALSE"""
 
     @gl.public.write
     def set_thresholds(self, notify_level_min: int, auto_pause_level_min: int):
+        notify_level_min = self._to_int(notify_level_min)
+        auto_pause_level_min = self._to_int(auto_pause_level_min)
         self._require_role(self.ADMIN_ROLE)
         self.notify_level_min = u8(notify_level_min)
         self.auto_pause_level_min = u8(auto_pause_level_min)
@@ -471,6 +516,9 @@ OUTPUT: TRUE or FALSE"""
 
     @gl.public.write
     def pause_protocol(self, protocol: Address, reason: str, tx_hash: str = "", risk_score: int = 100):
+        reason = self._to_str(reason)
+        tx_hash = self._to_str(tx_hash)
+        risk_score = self._to_int(risk_score)
         self._require_role(self.ADMIN_ROLE)
         protocol_addr = self._to_address(protocol)
         if not self.protected_protocols.get(protocol_addr, False):
@@ -552,15 +600,18 @@ OUTPUT: TRUE or FALSE"""
 
     @gl.public.view
     def get_risk_score(self, tx_hash: str) -> int:
+        tx_hash = self._to_str(tx_hash)
         return int(self.tx_risk_scores.get(tx_hash, u8(0)))
 
 
     @gl.public.view
     def get_tx_analysis(self, tx_hash: str) -> str:
+        tx_hash = self._to_str(tx_hash)
         return self.tx_analysis.get(tx_hash, "")
 
     @gl.public.view
     def get_tx_analysis_readable(self, tx_hash: str) -> str:
+        tx_hash = self._to_str(tx_hash)
         raw = self.tx_analysis.get(tx_hash, "")
         if raw == "":
             return "No analysis found for this transaction hash."
@@ -572,11 +623,12 @@ OUTPUT: TRUE or FALSE"""
             message = parsed.get("message", self._analysis_message(bool(threat), score))
             action = parsed.get("action", self._analysis_action(bool(threat), score))
             return f"{message} Risk score: {score}. Level: {level}. Recommended action: {action}"
-        except:
+        except Exception:
             return raw
 
     @gl.public.view
     def get_recent_analyses(self, count: int) -> str:
+        count = self._to_int(count)
         n = max(0, int(count))
         end = int(self.recent_index)
         start = end - n if end - n > 0 else 0

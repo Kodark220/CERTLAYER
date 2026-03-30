@@ -5,7 +5,7 @@ import urllib.request
 
 
 RPC_URL = os.getenv("GENLAYER_RPC_URL", "https://rpc-bradbury.genlayer.com")
-CONTRACT_ADDRESS = os.getenv("GENLAYER_CONTRACT", "0x3D91657256bcad522b201eaED2a6C9FEb3208Bd1")
+CONTRACT_ADDRESS = os.getenv("GENLAYER_CONTRACT", "0x0E2497d18FB4f09Ef9A71C7bF5D6494c714D4728")
 FROM_ADDRESS = os.getenv("GENLAYER_FROM", "")
 API_KEY = os.getenv("GENLAYER_API_KEY", "")
 

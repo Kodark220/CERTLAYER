@@ -64,13 +64,28 @@ class CertLayerContract(gl.Contract):
     def _dispute_key(self, incident_id: str, wallet: str) -> str:
         return incident_id + "|" + wallet.lower()
 
+    def _to_str(self, value) -> str:
+        """Unwrap CLI list-wrapping for string args (GenVM BUG #2 workaround)"""
+        while isinstance(value, list) and len(value) == 1:
+            value = value[0]
+        return str(value) if not isinstance(value, str) else value
+
+    def _to_int(self, value) -> int:
+        """Unwrap CLI list-wrapping for int args (GenVM BUG #2 workaround)"""
+        while isinstance(value, list) and len(value) == 1:
+            value = value[0]
+        return int(value)
+
     # ----------------------------
     # Registry
     # ----------------------------
     @gl.public.write
     def register_protocol(self, protocol_id: str, metadata_json: str, owner_wallet: str):
+        protocol_id = self._to_str(protocol_id)
+        metadata_json = self._to_str(metadata_json)
+        owner_wallet = self._to_str(owner_wallet)
         if protocol_id in self.protocol_metadata:
-            raise Exception("protocol already registered")
+            raise gl.vm.UserError("protocol already registered")
 
         self.protocol_metadata[protocol_id] = metadata_json
         self.protocol_owner_wallet[protocol_id] = owner_wallet.lower()
@@ -79,24 +94,29 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.write
     def set_protocol_status(self, protocol_id: str, new_status: str):
+        protocol_id = self._to_str(protocol_id)
+        new_status = self._to_str(new_status)
         if protocol_id not in self.protocol_metadata:
-            raise Exception("protocol not found")
+            raise gl.vm.UserError("protocol not found")
         self.protocol_status[protocol_id] = new_status
 
     @gl.public.view
     def get_protocol_metadata(self, protocol_id: str) -> str:
+        protocol_id = self._to_str(protocol_id)
         if protocol_id not in self.protocol_metadata:
             return ""
         return self.protocol_metadata[protocol_id]
 
     @gl.public.view
     def get_protocol_owner_wallet(self, protocol_id: str) -> str:
+        protocol_id = self._to_str(protocol_id)
         if protocol_id not in self.protocol_owner_wallet:
             return ""
         return self.protocol_owner_wallet[protocol_id]
 
     @gl.public.view
     def get_protocol_status(self, protocol_id: str) -> str:
+        protocol_id = self._to_str(protocol_id)
         if protocol_id not in self.protocol_status:
             return "unknown"
         return self.protocol_status[protocol_id]
@@ -110,18 +130,23 @@ class CertLayerContract(gl.Contract):
     # ----------------------------
     @gl.public.write
     def submit_incident_candidate(self, incident_id: str, payload_json: str):
+        incident_id = self._to_str(incident_id)
+        payload_json = self._to_str(payload_json)
         if incident_id in self.incident_payload:
-            raise Exception("incident already exists")
+            raise gl.vm.UserError("incident already exists")
         self.incident_payload[incident_id] = payload_json
         self.incident_status[incident_id] = "candidate"
         self.incident_decision[incident_id] = "pending"
 
     @gl.public.write
     def submit_verification_decision(self, incident_id: str, decision: str, reason: str):
+        incident_id = self._to_str(incident_id)
+        decision = self._to_str(decision)
+        reason = self._to_str(reason)
         if incident_id not in self.incident_payload:
-            raise Exception("incident not found")
+            raise gl.vm.UserError("incident not found")
         if decision != "breach_confirmed" and decision != "breach_rejected":
-            raise Exception("invalid decision")
+            raise gl.vm.UserError("invalid decision")
 
         self.incident_decision[incident_id] = decision
         self.incident_status[incident_id] = "decided"
@@ -132,14 +157,22 @@ class CertLayerContract(gl.Contract):
         """
         Non-deterministic web verification aligned with GenLayer Intelligent Contracts.
         """
+        incident_id = self._to_str(incident_id)
+        source_url = self._to_str(source_url)
+        must_contain = self._to_str(must_contain)
         if incident_id not in self.incident_payload:
-            raise Exception("incident not found")
+            raise gl.vm.UserError("incident not found")
 
         def non_deterministic_block():
             web_data = gl.get_webpage(source_url, mode="text")
             return must_contain.lower() in web_data.lower()
 
-        matched = gl.eq_principle_strict_eq(non_deterministic_block)
+        def validator_fn(leader_result):
+            if not isinstance(leader_result, gl.vm.Return):
+                return False
+            return non_deterministic_block() == leader_result.calldata
+
+        matched = gl.vm.run_nondet_unsafe(non_deterministic_block, validator_fn)
         self.incident_signal_verified[incident_id] = bool(matched)
         self.incident_signal_note[incident_id] = source_url
         if matched:
@@ -147,12 +180,16 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.write
     def create_incident(self, incident_id: str, protocol_id: str, start_ts: int, evidence_hash: str):
+        incident_id = self._to_str(incident_id)
+        protocol_id = self._to_str(protocol_id)
+        start_ts = self._to_int(start_ts)
+        evidence_hash = self._to_str(evidence_hash)
         if incident_id in self.incident_payload:
-            raise Exception("incident already exists")
+            raise gl.vm.UserError("incident already exists")
         if protocol_id not in self.protocol_metadata:
-            raise Exception("protocol not found")
+            raise gl.vm.UserError("protocol not found")
         if start_ts <= 0:
-            raise Exception("invalid start_ts")
+            raise gl.vm.UserError("invalid start_ts")
 
         self.incident_payload[incident_id] = "{}"
         self.incident_status[incident_id] = "candidate"
@@ -185,6 +222,12 @@ class CertLayerContract(gl.Contract):
         last_clean_block: int,
         trigger_sources_csv: str,
     ):
+        incident_id = self._to_str(incident_id)
+        protocol_id = self._to_str(protocol_id)
+        start_ts = self._to_int(start_ts)
+        evidence_hash = self._to_str(evidence_hash)
+        last_clean_block = self._to_int(last_clean_block)
+        trigger_sources_csv = self._to_str(trigger_sources_csv)
         self.create_incident(incident_id, protocol_id, start_ts, evidence_hash)
         self.incident_type[incident_id] = "security"
         self.incident_last_clean_block[incident_id] = bigint(last_clean_block)
@@ -192,37 +235,45 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.write
     def set_last_clean_block(self, incident_id: str, block_number: int):
+        incident_id = self._to_str(incident_id)
+        block_number = self._to_int(block_number)
         if incident_id not in self.incident_payload:
-            raise Exception("incident not found")
+            raise gl.vm.UserError("incident not found")
         if block_number < 0:
-            raise Exception("invalid block number")
+            raise gl.vm.UserError("invalid block number")
         self.incident_last_clean_block[incident_id] = bigint(block_number)
 
     @gl.public.write
     def attach_loss_snapshot(self, incident_id: str, wallets_csv: str, losses_csv: str):
+        incident_id = self._to_str(incident_id)
+        wallets_csv = self._to_str(wallets_csv)
+        losses_csv = self._to_str(losses_csv)
         # Reuse common queue storage for security-loss based payouts.
         self.attach_affected_users(incident_id, wallets_csv, losses_csv)
 
     @gl.public.write
     def attach_affected_users(self, incident_id: str, wallets_csv: str, amounts_csv: str):
+        incident_id = self._to_str(incident_id)
+        wallets_csv = self._to_str(wallets_csv)
+        amounts_csv = self._to_str(amounts_csv)
         if incident_id not in self.incident_payload:
-            raise Exception("incident not found")
+            raise gl.vm.UserError("incident not found")
 
         wallets = wallets_csv.split(",")
         amounts = amounts_csv.split(",")
         if len(wallets) != len(amounts):
-            raise Exception("wallets and amounts length mismatch")
+            raise gl.vm.UserError("wallets and amounts length mismatch")
         if len(wallets) == 0:
-            raise Exception("empty queue")
+            raise gl.vm.UserError("empty queue")
 
         total = bigint(0)
         for i in range(len(wallets)):
             wallet = wallets[i].strip().lower()
             if wallet == "":
-                raise Exception("invalid wallet")
+                raise gl.vm.UserError("invalid wallet")
             amount = int(amounts[i].strip())
             if amount <= 0:
-                raise Exception("invalid amount")
+                raise gl.vm.UserError("invalid amount")
             total = total + bigint(amount)
 
         self.incident_queue_wallets_csv[incident_id] = wallets_csv
@@ -231,61 +282,76 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.write
     def open_challenge_window(self, incident_id: str, challenge_ends_ts: int):
+        incident_id = self._to_str(incident_id)
+        challenge_ends_ts = self._to_int(challenge_ends_ts)
         if incident_id not in self.incident_payload:
-            raise Exception("incident not found")
+            raise gl.vm.UserError("incident not found")
         if challenge_ends_ts <= 0:
-            raise Exception("invalid challenge end")
+            raise gl.vm.UserError("invalid challenge end")
         self.incident_challenge_ends_ts[incident_id] = bigint(challenge_ends_ts)
         self.incident_status[incident_id] = "challenge_open"
 
     @gl.public.write
     def raise_dispute(self, incident_id: str, wallet: str, evidence_hash: str):
+        incident_id = self._to_str(incident_id)
+        wallet = self._to_str(wallet)
+        evidence_hash = self._to_str(evidence_hash)
         if incident_id not in self.incident_payload:
-            raise Exception("incident not found")
+            raise gl.vm.UserError("incident not found")
         key = self._dispute_key(incident_id, wallet)
         self.incident_dispute_decision[key] = "pending"
         self.incident_dispute_evidence[key] = evidence_hash
 
     @gl.public.write
     def resolve_dispute(self, incident_id: str, wallet: str, decision: str):
+        incident_id = self._to_str(incident_id)
+        wallet = self._to_str(wallet)
+        decision = self._to_str(decision)
         if decision != "approved" and decision != "rejected":
-            raise Exception("invalid dispute decision")
+            raise gl.vm.UserError("invalid dispute decision")
         key = self._dispute_key(incident_id, wallet)
         if key not in self.incident_dispute_decision:
-            raise Exception("dispute not found")
+            raise gl.vm.UserError("dispute not found")
         self.incident_dispute_decision[key] = decision
 
     @gl.public.write
     def finalize_incident(self, incident_id: str, current_ts: int):
+        incident_id = self._to_str(incident_id)
+        current_ts = self._to_int(current_ts)
         if incident_id not in self.incident_payload:
-            raise Exception("incident not found")
+            raise gl.vm.UserError("incident not found")
         if incident_id not in self.incident_challenge_ends_ts:
-            raise Exception("challenge window not set")
+            raise gl.vm.UserError("challenge window not set")
         if bigint(current_ts) < self.incident_challenge_ends_ts[incident_id]:
-            raise Exception("challenge window still open")
+            raise gl.vm.UserError("challenge window still open")
         self.incident_status[incident_id] = "finalized"
 
     @gl.public.write
     def execute_payout_batch(self, incident_id: str, protocol_id: str, start_index: int, limit: int, current_ts: int):
+        incident_id = self._to_str(incident_id)
+        protocol_id = self._to_str(protocol_id)
+        start_index = self._to_int(start_index)
+        limit = self._to_int(limit)
+        current_ts = self._to_int(current_ts)
         if incident_id not in self.incident_payload:
-            raise Exception("incident not found")
+            raise gl.vm.UserError("incident not found")
         if incident_id in self.incident_enforced and self.incident_enforced[incident_id]:
-            raise Exception("incident already fully enforced")
+            raise gl.vm.UserError("incident already fully enforced")
         if self.incident_status[incident_id] != "finalized":
-            raise Exception("incident not finalized")
+            raise gl.vm.UserError("incident not finalized")
         if incident_id not in self.incident_protocol_id or self.incident_protocol_id[incident_id] != protocol_id:
-            raise Exception("protocol mismatch")
+            raise gl.vm.UserError("protocol mismatch")
         if bigint(current_ts) < self.incident_challenge_ends_ts[incident_id]:
-            raise Exception("challenge window still open")
+            raise gl.vm.UserError("challenge window still open")
         if start_index < 0 or limit <= 0:
-            raise Exception("invalid batch range")
+            raise gl.vm.UserError("invalid batch range")
 
         wallets_raw = self.incident_queue_wallets_csv[incident_id]
         amounts_raw = self.incident_queue_amounts_csv[incident_id]
         wallets = wallets_raw.split(",") if wallets_raw != "" else []
         amounts = amounts_raw.split(",") if amounts_raw != "" else []
         if len(wallets) != len(amounts):
-            raise Exception("corrupt payout queue")
+            raise gl.vm.UserError("corrupt payout queue")
 
         end_index = start_index + limit
         if end_index > len(wallets):
@@ -304,7 +370,7 @@ class CertLayerContract(gl.Contract):
         if protocol_id in self.pool_balance:
             current_pool = self.pool_balance[protocol_id]
         if current_pool < batch_total:
-            raise Exception("insufficient pool balance")
+            raise gl.vm.UserError("insufficient pool balance")
 
         self.pool_balance[protocol_id] = current_pool - batch_total
 
@@ -327,10 +393,12 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.write
     def record_recovery(self, incident_id: str, amount: int):
+        incident_id = self._to_str(incident_id)
+        amount = self._to_int(amount)
         if incident_id not in self.incident_payload:
-            raise Exception("incident not found")
+            raise gl.vm.UserError("incident not found")
         if amount <= 0:
-            raise Exception("invalid recovery amount")
+            raise gl.vm.UserError("invalid recovery amount")
         current = bigint(0)
         if incident_id in self.incident_recovery_pool:
             current = self.incident_recovery_pool[incident_id]
@@ -338,26 +406,29 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.write
     def distribute_recovery_batch(self, incident_id: str, start_index: int, limit: int):
+        incident_id = self._to_str(incident_id)
+        start_index = self._to_int(start_index)
+        limit = self._to_int(limit)
         if incident_id not in self.incident_payload:
-            raise Exception("incident not found")
+            raise gl.vm.UserError("incident not found")
         if start_index < 0 or limit <= 0:
-            raise Exception("invalid batch range")
+            raise gl.vm.UserError("invalid batch range")
 
         wallets_raw = self.incident_queue_wallets_csv[incident_id]
         amounts_raw = self.incident_queue_amounts_csv[incident_id]
         wallets = wallets_raw.split(",") if wallets_raw != "" else []
         losses = amounts_raw.split(",") if amounts_raw != "" else []
         if len(wallets) != len(losses):
-            raise Exception("corrupt loss snapshot")
+            raise gl.vm.UserError("corrupt loss snapshot")
         total_loss = self.incident_total_amount[incident_id]
         if total_loss <= bigint(0):
-            raise Exception("invalid total loss")
+            raise gl.vm.UserError("invalid total loss")
 
         recovery_pool = self.incident_recovery_pool[incident_id]
         distributed = self.incident_recovery_distributed[incident_id]
         remaining = recovery_pool - distributed
         if remaining <= bigint(0):
-            raise Exception("no recovery funds to distribute")
+            raise gl.vm.UserError("no recovery funds to distribute")
 
         end_index = start_index + limit
         if end_index > len(wallets):
@@ -393,8 +464,14 @@ class CertLayerContract(gl.Contract):
         post_mortem_quality: int,
         recovery_effort: int,
     ):
+        incident_id = self._to_str(incident_id)
+        response_speed = self._to_int(response_speed)
+        communication_quality = self._to_int(communication_quality)
+        pool_adequacy = self._to_int(pool_adequacy)
+        post_mortem_quality = self._to_int(post_mortem_quality)
+        recovery_effort = self._to_int(recovery_effort)
         if incident_id not in self.incident_payload:
-            raise Exception("incident not found")
+            raise gl.vm.UserError("incident not found")
         self.incident_response_speed_score[incident_id] = bigint(response_speed)
         self.incident_communication_quality_score[incident_id] = bigint(communication_quality)
         self.incident_pool_adequacy_score[incident_id] = bigint(pool_adequacy)
@@ -412,12 +489,19 @@ class CertLayerContract(gl.Contract):
         deadline_ts: int,
         verification_rule: str,
     ):
+        commitment_id = self._to_str(commitment_id)
+        protocol_id = self._to_str(protocol_id)
+        commitment_type = self._to_str(commitment_type)
+        source_url = self._to_str(source_url)
+        commitment_text_hash = self._to_str(commitment_text_hash)
+        deadline_ts = self._to_int(deadline_ts)
+        verification_rule = self._to_str(verification_rule)
         if commitment_id in self.commitment_protocol_id:
-            raise Exception("commitment already exists")
+            raise gl.vm.UserError("commitment already exists")
         if protocol_id not in self.protocol_metadata:
-            raise Exception("protocol not found")
+            raise gl.vm.UserError("protocol not found")
         if deadline_ts <= 0:
-            raise Exception("invalid deadline")
+            raise gl.vm.UserError("invalid deadline")
 
         self.commitment_protocol_id[commitment_id] = protocol_id
         self.commitment_type[commitment_id] = commitment_type
@@ -431,10 +515,14 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.write
     def evaluate_commitment(self, commitment_id: str, result: str, evidence_hash: str, current_ts: int):
+        commitment_id = self._to_str(commitment_id)
+        result = self._to_str(result)
+        evidence_hash = self._to_str(evidence_hash)
+        current_ts = self._to_int(current_ts)
         if commitment_id not in self.commitment_protocol_id:
-            raise Exception("commitment not found")
+            raise gl.vm.UserError("commitment not found")
         if result != "fulfilled" and result != "partial" and result != "missed":
-            raise Exception("invalid result")
+            raise gl.vm.UserError("invalid result")
 
         self.commitment_evidence_hash[commitment_id] = evidence_hash
         if result == "missed":
@@ -447,22 +535,26 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.write
     def submit_commitment_fulfillment_evidence(self, commitment_id: str, evidence_hash: str):
+        commitment_id = self._to_str(commitment_id)
+        evidence_hash = self._to_str(evidence_hash)
         if commitment_id not in self.commitment_protocol_id:
-            raise Exception("commitment not found")
+            raise gl.vm.UserError("commitment not found")
         if self.commitment_status[commitment_id] != "missed_grace":
-            raise Exception("commitment not in grace window")
+            raise gl.vm.UserError("commitment not in grace window")
         self.commitment_evidence_hash[commitment_id] = evidence_hash
         self.commitment_status[commitment_id] = "fulfilled_grace"
         self.commitment_grace_ends_ts[commitment_id] = bigint(0)
 
     @gl.public.write
     def finalize_commitment(self, commitment_id: str, current_ts: int):
+        commitment_id = self._to_str(commitment_id)
+        current_ts = self._to_int(current_ts)
         if commitment_id not in self.commitment_protocol_id:
-            raise Exception("commitment not found")
+            raise gl.vm.UserError("commitment not found")
         if self.commitment_status[commitment_id] != "missed_grace":
-            raise Exception("commitment not pending grace finalization")
+            raise gl.vm.UserError("commitment not pending grace finalization")
         if bigint(current_ts) < self.commitment_grace_ends_ts[commitment_id]:
-            raise Exception("grace window still open")
+            raise gl.vm.UserError("grace window still open")
 
         self.commitment_status[commitment_id] = "missed_final"
         protocol_id = self.commitment_protocol_id[commitment_id]
@@ -479,90 +571,105 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.view
     def get_incident_payload(self, incident_id: str) -> str:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_payload:
             return ""
         return self.incident_payload[incident_id]
 
     @gl.public.view
     def get_incident_status(self, incident_id: str) -> str:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_status:
             return "unknown"
         return self.incident_status[incident_id]
 
     @gl.public.view
     def get_incident_decision(self, incident_id: str) -> str:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_decision:
             return "pending"
         return self.incident_decision[incident_id]
 
     @gl.public.view
     def get_incident_signal_verified(self, incident_id: str) -> bool:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_signal_verified:
             return False
         return self.incident_signal_verified[incident_id]
 
     @gl.public.view
     def get_incident_signal_note(self, incident_id: str) -> str:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_signal_note:
             return ""
         return self.incident_signal_note[incident_id]
 
     @gl.public.view
     def get_incident_protocol_id(self, incident_id: str) -> str:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_protocol_id:
             return ""
         return self.incident_protocol_id[incident_id]
 
     @gl.public.view
     def get_incident_type(self, incident_id: str) -> str:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_type:
             return ""
         return self.incident_type[incident_id]
 
     @gl.public.view
     def get_incident_challenge_ends_ts(self, incident_id: str) -> int:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_challenge_ends_ts:
             return 0
         return int(self.incident_challenge_ends_ts[incident_id])
 
     @gl.public.view
     def get_incident_total_amount(self, incident_id: str) -> int:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_total_amount:
             return 0
         return int(self.incident_total_amount[incident_id])
 
     @gl.public.view
     def get_incident_paid_count(self, incident_id: str) -> int:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_paid_count:
             return 0
         return int(self.incident_paid_count[incident_id])
 
     @gl.public.view
     def get_incident_recovery_pool(self, incident_id: str) -> int:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_recovery_pool:
             return 0
         return int(self.incident_recovery_pool[incident_id])
 
     @gl.public.view
     def get_incident_recovery_distributed(self, incident_id: str) -> int:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_recovery_distributed:
             return 0
         return int(self.incident_recovery_distributed[incident_id])
 
     @gl.public.view
     def get_last_clean_block(self, incident_id: str) -> int:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_last_clean_block:
             return 0
         return int(self.incident_last_clean_block[incident_id])
 
     @gl.public.view
     def get_trigger_sources(self, incident_id: str) -> str:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_trigger_sources:
             return ""
         return self.incident_trigger_sources[incident_id]
 
     @gl.public.view
     def get_hack_response_score_average(self, incident_id: str) -> int:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_payload:
             return 0
         total = (
@@ -576,6 +683,8 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.view
     def get_dispute_decision(self, incident_id: str, wallet: str) -> str:
+        incident_id = self._to_str(incident_id)
+        wallet = self._to_str(wallet)
         key = self._dispute_key(incident_id, wallet)
         if key not in self.incident_dispute_decision:
             return ""
@@ -583,6 +692,7 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.view
     def get_wallet_compensation_balance(self, wallet: str) -> int:
+        wallet = self._to_str(wallet)
         key = wallet.lower()
         if key not in self.wallet_compensation_balance:
             return 0
@@ -590,24 +700,28 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.view
     def get_commitment_status(self, commitment_id: str) -> str:
+        commitment_id = self._to_str(commitment_id)
         if commitment_id not in self.commitment_status:
             return ""
         return self.commitment_status[commitment_id]
 
     @gl.public.view
     def get_commitment_protocol_id(self, commitment_id: str) -> str:
+        commitment_id = self._to_str(commitment_id)
         if commitment_id not in self.commitment_protocol_id:
             return ""
         return self.commitment_protocol_id[commitment_id]
 
     @gl.public.view
     def get_commitment_grace_ends_ts(self, commitment_id: str) -> int:
+        commitment_id = self._to_str(commitment_id)
         if commitment_id not in self.commitment_grace_ends_ts:
             return 0
         return int(self.commitment_grace_ends_ts[commitment_id])
 
     @gl.public.view
     def get_protocol_missed_commitments_count(self, protocol_id: str) -> int:
+        protocol_id = self._to_str(protocol_id)
         if protocol_id not in self.protocol_missed_commitments_count:
             return 0
         return int(self.protocol_missed_commitments_count[protocol_id])
@@ -617,8 +731,10 @@ class CertLayerContract(gl.Contract):
     # ----------------------------
     @gl.public.write
     def deposit(self, protocol_id: str, amount: int):
+        protocol_id = self._to_str(protocol_id)
+        amount = self._to_int(amount)
         if amount <= 0:
-            raise Exception("amount must be positive")
+            raise gl.vm.UserError("amount must be positive")
 
         current = bigint(0)
         if protocol_id in self.pool_balance:
@@ -629,29 +745,34 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.write
     def execute_compensation(self, incident_id: str, protocol_id: str, total_amount: int):
+        incident_id = self._to_str(incident_id)
+        protocol_id = self._to_str(protocol_id)
+        total_amount = self._to_int(total_amount)
         if total_amount <= 0:
-            raise Exception("invalid amount")
+            raise gl.vm.UserError("invalid amount")
         if incident_id in self.incident_enforced and self.incident_enforced[incident_id]:
-            raise Exception("incident already enforced")
+            raise gl.vm.UserError("incident already enforced")
 
         current = bigint(0)
         if protocol_id in self.pool_balance:
             current = self.pool_balance[protocol_id]
 
         if current < bigint(total_amount):
-            raise Exception("insufficient pool balance")
+            raise gl.vm.UserError("insufficient pool balance")
 
         self.pool_balance[protocol_id] = current - bigint(total_amount)
         self.incident_enforced[incident_id] = True
 
     @gl.public.view
     def get_pool_balance(self, protocol_id: str) -> int:
+        protocol_id = self._to_str(protocol_id)
         if protocol_id not in self.pool_balance:
             return 0
         return int(self.pool_balance[protocol_id])
 
     @gl.public.view
     def is_incident_enforced(self, incident_id: str) -> bool:
+        incident_id = self._to_str(incident_id)
         if incident_id not in self.incident_enforced:
             return False
         return self.incident_enforced[incident_id]
@@ -668,6 +789,11 @@ class CertLayerContract(gl.Contract):
         response_component: int,
         pool_health_component: int,
     ):
+        protocol_id = self._to_str(protocol_id)
+        uptime_component = self._to_int(uptime_component)
+        incident_component = self._to_int(incident_component)
+        response_component = self._to_int(response_component)
+        pool_health_component = self._to_int(pool_health_component)
         total = uptime_component + incident_component + response_component + pool_health_component
         score = total // 4
 
@@ -686,12 +812,14 @@ class CertLayerContract(gl.Contract):
 
     @gl.public.view
     def get_score(self, protocol_id: str) -> int:
+        protocol_id = self._to_str(protocol_id)
         if protocol_id not in self.protocol_score:
             return 0
         return int(self.protocol_score[protocol_id])
 
     @gl.public.view
     def get_grade(self, protocol_id: str) -> str:
+        protocol_id = self._to_str(protocol_id)
         if protocol_id not in self.protocol_grade:
             return "N/A"
         return self.protocol_grade[protocol_id]
